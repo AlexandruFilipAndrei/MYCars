@@ -1,0 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 33% 97%;
+    --foreground: 220 28% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 28% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 28% 12%;
+    --primary: 214 78% 30%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 32 72% 92%;
+    --secondary-foreground: 220 28% 18%;
+    --muted: 38 32% 94%;
+    --muted-foreground: 220 14% 42%;
+    --accent: 28 100% 92%;
+    --accent-foreground: 21 82% 25%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 145 63% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 36 92% 52%;
+    --warning-foreground: 220 28% 14%;
+    --border: 30 26% 86%;
+    --input: 30 22% 88%;
+    --ring: 214 78% 30%;
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 215 28% 9%;
+    --foreground: 35 38% 95%;
+    --card: 217 24% 13%;
+    --card-foreground: 35 38% 95%;
+    --popover: 217 24% 13%;
+    --popover-foreground: 35 38% 95%;
+    --primary: 30 94% 60%;
+    --primary-foreground: 220 28% 10%;
+    --secondary: 215 20% 18%;
+    --secondary-foreground: 35 38% 95%;
+    --muted: 216 18% 17%;
+    --muted-foreground: 216 12% 68%;
+    --accent: 215 18% 19%;
+    --accent-foreground: 35 38% 95%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 146 58% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 36 92% 56%;
+    --warning-foreground: 220 28% 10%;
+    --border: 217 16% 22%;
+    --input: 217 16% 22%;
+    --ring: 30 94% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    margin: 0;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at top left, rgba(245, 158, 11, 0.16), transparent 28%),
+      radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 24%);
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-3xl border border-white/10 bg-white/70 shadow-soft backdrop-blur-xl dark:bg-slate-900/70;
+  }
+
+  .page-shell {
+    @apply mx-auto flex min-h-screen w-full max-w-[1600px] gap-4 p-3 md:p-4;
+  }
+
+  .page-title {
+    @apply font-display text-3xl font-bold tracking-tight md:text-4xl;
+  }
+}
