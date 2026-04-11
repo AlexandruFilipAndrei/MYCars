@@ -96,19 +96,19 @@ export function AppShell() {
 
       {open ? <button className="fixed inset-0 z-30 bg-slate-950/30 md:hidden" onClick={() => setOpen(false)} /> : null}
 
-      <div className="flex min-h-screen flex-1 flex-col gap-4 md:pl-0">
-        <header className="glass-panel sticky top-3 z-20 flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col gap-4 md:pl-0">
+        <header className="glass-panel sticky top-3 z-20 flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
             <Button variant="outline" size="icon" className="md:hidden" onClick={() => setOpen((value) => !value)}>
               <Menu className="h-5 w-5" />
             </Button>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-muted-foreground">Bine ai revenit</p>
-              <p className="font-display text-xl font-bold">{profile?.fullName ?? user?.fullName ?? 'Utilizator MYCars'}</p>
+              <p className="truncate font-display text-xl font-bold">{profile?.fullName ?? user?.fullName ?? 'Utilizator MYCars'}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             <button className="relative rounded-2xl border bg-card p-3" onClick={() => navigate('/notificari')} aria-label="Notificări">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 ? (
@@ -129,7 +129,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 pb-6">
+        <main className="min-w-0 flex-1 pb-6">
           {isLoading ? (
             <div className="flex min-h-[50vh] items-center justify-center text-lg font-semibold">Se încarcă datele contului...</div>
           ) : (

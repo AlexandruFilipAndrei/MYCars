@@ -19,7 +19,7 @@ export function PageHeader({
         <h1 className="page-title">{title}</h1>
         {description ? <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">{description}</p> : null}
       </div>
-      {action}
+      {action ? <div className="w-full sm:w-auto [&>*]:w-full sm:[&>*]:w-auto">{action}</div> : null}
     </div>
   )
 }

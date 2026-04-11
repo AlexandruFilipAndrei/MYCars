@@ -64,12 +64,15 @@
 
   html {
     @apply scroll-smooth;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background font-sans text-foreground antialiased;
     margin: 0;
+    width: 100%;
     min-height: 100vh;
+    overflow-x: hidden;
     background-image:
       radial-gradient(circle at top left, rgba(245, 158, 11, 0.16), transparent 28%),
       radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 24%);
@@ -77,6 +80,7 @@
 
   #root {
     min-height: 100vh;
+    overflow-x: hidden;
   }
 }
 
@@ -86,7 +90,7 @@
   }
 
   .page-shell {
-    @apply mx-auto flex min-h-screen w-full max-w-[1600px] gap-4 p-3 md:p-4;
+    @apply mx-auto flex min-h-screen w-full max-w-[1600px] gap-4 overflow-x-hidden p-3 md:p-4;
   }
 
   .page-title {
