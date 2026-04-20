@@ -66,6 +66,7 @@ type RemoteCarRow = {
   purchase_price: number | null
   purchase_currency: Car['purchaseCurrency'] | null
   notes: string | null
+  service_return_date: string | null
   current_km: number | null
   archived_at: string | null
   created_at: string | null
@@ -128,6 +129,7 @@ type RemoteMaintenanceRow = {
   description: string
   cost: number
   date_performed: string
+  expected_completion_date: string | null
   km_at_service: number | null
   notes: string | null
   created_at: string | null
@@ -768,6 +770,7 @@ function normalizeCarInput(input: CarWriteInput): CarWriteInput {
     chassisNumber: normalizeChassisNumber(input.chassisNumber),
     category: input.category ?? 'general',
     purchaseCurrency: input.purchaseCurrency ?? 'RON',
+    serviceReturnDate: input.status === 'maintenance' ? input.serviceReturnDate ?? undefined : undefined,
   }
 }
 
@@ -788,6 +791,7 @@ function buildCarPayloadFromInput(input: CarWriteInput) {
     purchase_price: input.purchasePrice ?? null,
     purchase_currency: input.purchaseCurrency,
     notes: input.notes ?? null,
+    service_return_date: input.status === 'maintenance' ? input.serviceReturnDate ?? null : null,
     current_km: input.currentKm,
     archived_at: input.archivedAt ?? null,
     updated_at: new Date().toISOString(),
@@ -811,6 +815,7 @@ function buildCarPayloadFromRow(row: RemoteCarRow) {
     purchase_price: row.purchase_price,
     purchase_currency: row.purchase_currency ?? 'RON',
     notes: row.notes,
+    service_return_date: row.service_return_date,
     current_km: row.current_km,
     archived_at: row.archived_at,
     updated_at: row.updated_at ?? new Date().toISOString(),
@@ -824,9 +829,154 @@ function buildMaintenancePayloadFromRow(row: RemoteMaintenanceRow) {
     description: row.description,
     cost: row.cost,
     date_performed: row.date_performed,
+    expected_completion_date: row.expected_completion_date,
     km_at_service: row.km_at_service,
     notes: row.notes,
   }
+}
+
+function compareMaintenanceRecency(
+  first: Pick<Maintenance, 'id' | 'datePerformed' | 'createdAt'>,
+  second: Pick<Maintenance, 'id' | 'datePerformed' | 'createdAt'>,
+) {
+  if (first.datePerformed !== second.datePerformed) {
+    return second.datePerformed.localeCompare(first.datePerformed)
+  }
+
+  if (first.createdAt !== second.createdAt) {
+    return second.createdAt.localeCompare(first.createdAt)
+  }
+
+  return second.id.localeCompare(first.id)
+}
+
+function getLatestDemoMaintenanceForCar(state: AppDataState, carId: string) {
+  return [...state.maintenance.filter((item) => item.carId === carId)].sort(compareMaintenanceRecency)[0]
+}
+
+function syncDemoCarServiceReturnDateFromLatestMaintenance(
+  state: AppDataState,
+  carId: string,
+  options: { forceMaintenanceStatus?: boolean } = {},
+) {
+  const currentCar = state.cars.find((item) => item.id === carId)
+
+  if (!currentCar) {
+    return
+  }
+
+  if (!options.forceMaintenanceStatus && currentCar.status !== 'maintenance') {
+    return
+  }
+
+  const latestMaintenance = getLatestDemoMaintenanceForCar(state, carId)
+  const now = new Date().toISOString()
+
+  state.cars = state.cars.map((item) =>
+    item.id === carId
+      ? {
+          ...item,
+          status: options.forceMaintenanceStatus ? 'maintenance' : item.status,
+          serviceReturnDate: latestMaintenance?.expectedCompletionDate ?? undefined,
+          updatedAt: now,
+        }
+      : item,
+  )
+}
+
+function syncDemoLatestMaintenanceExpectedCompletionFromCar(
+  state: AppDataState,
+  carId: string,
+  serviceReturnDate?: string,
+) {
+  const latestMaintenance = getLatestDemoMaintenanceForCar(state, carId)
+
+  if (!latestMaintenance) {
+    return
+  }
+
+  state.maintenance = state.maintenance.map((item) =>
+    item.id === latestMaintenance.id
+      ? {
+          ...item,
+          expectedCompletionDate: serviceReturnDate ?? undefined,
+        }
+      : item,
+  )
+}
+
+async function getLatestRemoteMaintenanceForCar(carId: string) {
+  const { data, error } = await table('maintenance')
+    .select('*')
+    .eq('car_id', carId)
+    .order('date_performed', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return ((data ?? [])[0] as RemoteMaintenanceRow | undefined) ?? null
+}
+
+async function syncRemoteCarServiceReturnDateFromLatestMaintenance(
+  carId: string,
+  options: { forceMaintenanceStatus?: boolean } = {},
+) {
+  const [latestMaintenance, carResult] = await Promise.all([
+    getLatestRemoteMaintenanceForCar(carId),
+    table('cars').select('status').eq('id', carId).maybeSingle(),
+  ])
+
+  if (carResult.error) {
+    throw new Error(carResult.error.message)
+  }
+
+  const currentStatus = carResult.data?.status as Car['status'] | undefined
+
+  if (!currentStatus) {
+    return
+  }
+
+  if (!options.forceMaintenanceStatus && currentStatus !== 'maintenance') {
+    return
+  }
+
+  const { error } = await table('cars')
+    .update({
+      status: options.forceMaintenanceStatus ? 'maintenance' : currentStatus,
+      service_return_date: latestMaintenance?.expected_completion_date ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', carId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+async function syncRemoteLatestMaintenanceExpectedCompletionFromCar(
+  carId: string,
+  serviceReturnDate?: string,
+) {
+  const latestMaintenance = await getLatestRemoteMaintenanceForCar(carId)
+
+  if (!latestMaintenance) {
+    return null
+  }
+
+  const { error } = await table('maintenance')
+    .update({
+      expected_completion_date: serviceReturnDate ?? null,
+    })
+    .eq('id', latestMaintenance.id)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return latestMaintenance
 }
 
 async function hasRemoteActiveRentals(carId: string, excludeRentalId?: string) {
@@ -1196,6 +1346,7 @@ function mapCar(row: RemoteCarRow): Car {
     purchasePrice: row.purchase_price ?? undefined,
     purchaseCurrency: row.purchase_currency ?? 'RON',
     notes: row.notes ?? undefined,
+    serviceReturnDate: row.service_return_date ?? undefined,
     currentKm: row.current_km ?? 0,
     archivedAt: row.archived_at ?? undefined,
     createdAt: row.created_at ?? new Date().toISOString(),
@@ -1270,6 +1421,7 @@ function mapMaintenance(row: RemoteMaintenanceRow): Maintenance {
     description: row.description,
     cost: row.cost,
     datePerformed: row.date_performed,
+    expectedCompletionDate: row.expected_completion_date ?? undefined,
     kmAtService: row.km_at_service ?? undefined,
     notes: row.notes ?? undefined,
     createdAt: row.created_at ?? new Date().toISOString(),
@@ -1532,6 +1684,11 @@ export const dataService = {
       state.cars = current ? state.cars.map((item) => (item.id === normalizedInput.id ? car : item)) : [car, ...state.cars]
       state.documents = [...nextDocuments, ...state.documents.filter((item) => item.carId !== car.id)]
       state.carPhotos = nextCarPhotos.length > 0 ? [...nextCarPhotos, ...state.carPhotos] : state.carPhotos
+
+      if (car.status === 'maintenance') {
+        syncDemoLatestMaintenanceExpectedCompletionFromCar(state, car.id, car.serviceReturnDate)
+      }
+
       revokeDemoBlobUrls([...removedDocumentUrls, ...replacedDocumentUrls])
       writeDemoState(user.id, state)
       return car
@@ -1557,12 +1714,17 @@ export const dataService = {
 
     const savedCar = mapCar(data as RemoteCarRow)
     let documentSyncResult: SyncCarDocumentsResult | null = null
+    let previousSyncedMaintenanceRow: RemoteMaintenanceRow | null = null
 
     try {
       documentSyncResult = await syncCarDocuments(savedCar, normalizedInput)
 
       if (normalizedInput.photoFiles?.length) {
         await addCarPhotos(savedCar, normalizedInput.photoFiles)
+      }
+
+      if (savedCar.status === 'maintenance') {
+        previousSyncedMaintenanceRow = await syncRemoteLatestMaintenanceExpectedCompletionFromCar(savedCar.id, savedCar.serviceReturnDate)
       }
 
       if (documentSyncResult.obsoletePaths.length > 0) {
@@ -1574,6 +1736,10 @@ export const dataService = {
       if (normalizedInput.id) {
         if (previousCarRow) {
           await table('cars').update(buildCarPayloadFromRow(previousCarRow)).eq('id', previousCarRow.id)
+        }
+
+        if (previousSyncedMaintenanceRow) {
+          await restoreMaintenanceRow(previousSyncedMaintenanceRow)
         }
 
         if (documentSyncResult) {
@@ -1632,6 +1798,98 @@ export const dataService = {
     )
 
     const { error } = await table('cars').delete().eq('id', id)
+    if (error) {
+      throw new Error(error.message)
+    }
+  },
+
+  async updateCarNotes(user: AppUser, id: string, notes: string) {
+    const normalizedNotes = notes.trim()
+
+    if (isDemoUser(user)) {
+      const state = readDemoState(user)
+      const current = state.cars.find((item) => item.id === id)
+
+      if (!current) {
+        throw new Error('Mașina selectată nu există.')
+      }
+
+      const updatedCar: Car = {
+        ...current,
+        notes: normalizedNotes || undefined,
+        updatedAt: new Date().toISOString(),
+      }
+
+      state.cars = state.cars.map((item) => (item.id === id ? updatedCar : item))
+      writeDemoState(user.id, state)
+      return updatedCar
+    }
+
+    const { data, error } = await table('cars')
+      .update({
+        notes: normalizedNotes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return mapCar(data as RemoteCarRow)
+  },
+
+  async deleteCarDocument(user: AppUser, id: string) {
+    if (isDemoUser(user)) {
+      const state = readDemoState(user)
+      const document = state.documents.find((item) => item.id === id)
+
+      if (document?.fileUrl) {
+        revokeDemoBlobUrls([document.fileUrl])
+      }
+
+      state.documents = state.documents.filter((item) => item.id !== id)
+      writeDemoState(user.id, state)
+      return
+    }
+
+    const documentResult = await table('car_documents').select('file_url').eq('id', id).maybeSingle()
+    if (documentResult.error) {
+      throw new Error(documentResult.error.message)
+    }
+
+    await tryRemoveStorageFiles('car-documents', [documentResult.data?.file_url as string | null | undefined])
+
+    const { error } = await table('car_documents').delete().eq('id', id)
+    if (error) {
+      throw new Error(error.message)
+    }
+  },
+
+  async deleteCarPhoto(user: AppUser, id: string) {
+    if (isDemoUser(user)) {
+      const state = readDemoState(user)
+      const photo = state.carPhotos.find((item) => item.id === id)
+
+      if (photo?.fileUrl) {
+        revokeDemoBlobUrls([photo.fileUrl])
+      }
+
+      state.carPhotos = state.carPhotos.filter((item) => item.id !== id)
+      writeDemoState(user.id, state)
+      return
+    }
+
+    const photoResult = await table('car_photos').select('file_url').eq('id', id).maybeSingle()
+    if (photoResult.error) {
+      throw new Error(photoResult.error.message)
+    }
+
+    await tryRemoveStorageFiles('car-photos', [photoResult.data?.file_url as string | null | undefined])
+
+    const { error } = await table('car_photos').delete().eq('id', id)
     if (error) {
       throw new Error(error.message)
     }
@@ -1780,6 +2038,7 @@ export const dataService = {
       const state = readDemoState(user)
       assertDemoMaintenanceStatusAllowed(state, input)
       const current = input.id ? state.maintenance.find((item) => item.id === input.id) : undefined
+      const previousCarId = current?.carId
       const now = new Date().toISOString()
       const maintenanceId = input.id ?? crypto.randomUUID()
       const nextDocuments = [
@@ -1801,11 +2060,15 @@ export const dataService = {
       state.maintenance = current
         ? state.maintenance.map((item) => (item.id === input.id ? maintenance : item))
         : [maintenance, ...state.maintenance]
-      if (input.markCarAsMaintenance) {
-        state.cars = state.cars.map((car) =>
-          car.id === input.carId ? { ...car, status: 'maintenance', updatedAt: new Date().toISOString() } : car,
-        )
+
+      const affectedCarIds = Array.from(new Set([previousCarId, input.carId].filter((carId): carId is string => Boolean(carId))))
+
+      for (const carId of affectedCarIds) {
+        syncDemoCarServiceReturnDateFromLatestMaintenance(state, carId, {
+          forceMaintenanceStatus: input.markCarAsMaintenance && carId === input.carId,
+        })
       }
+
       writeDemoState(user.id, state)
       return maintenance
     }
@@ -1818,12 +2081,14 @@ export const dataService = {
     }
 
     const previousMaintenanceRow = (previousMaintenanceResult?.data as RemoteMaintenanceRow | null) ?? null
+    const previousCarId = previousMaintenanceRow?.car_id ?? null
     const payload = {
       car_id: input.carId,
       type: input.type,
       description: input.description,
       cost: input.cost,
       date_performed: input.datePerformed,
+      expected_completion_date: input.expectedCompletionDate ?? null,
       km_at_service: input.kmAtService ?? null,
       notes: input.notes ?? null,
     }
@@ -1845,11 +2110,12 @@ export const dataService = {
         uploadResult = await addMaintenanceDocuments(user, maintenance.id, input.documentFiles)
       }
 
-      if (input.markCarAsMaintenance) {
-        const updateCar = await table('cars').update({ status: 'maintenance', updated_at: new Date().toISOString() }).eq('id', input.carId)
-        if (updateCar.error) {
-          throw new Error(updateCar.error.message)
-        }
+      const affectedCarIds = Array.from(new Set([previousCarId, input.carId].filter((carId): carId is string => Boolean(carId))))
+
+      for (const carId of affectedCarIds) {
+        await syncRemoteCarServiceReturnDateFromLatestMaintenance(carId, {
+          forceMaintenanceStatus: input.markCarAsMaintenance && carId === input.carId,
+        })
       }
 
       return maintenance
@@ -1867,6 +2133,16 @@ export const dataService = {
         await rollbackCreatedMaintenance(maintenance.id)
       }
 
+      const affectedCarIds = Array.from(new Set([previousCarId, input.carId].filter((carId): carId is string => Boolean(carId))))
+
+      for (const carId of affectedCarIds) {
+        try {
+          await syncRemoteCarServiceReturnDateFromLatestMaintenance(carId)
+        } catch {
+          // Best-effort sync after rollback.
+        }
+      }
+
       throw saveError
     }
   },
@@ -1877,8 +2153,16 @@ export const dataService = {
       const deletedMaintenance = state.maintenance.find((item) => item.id === id)
       revokeDemoBlobUrls(deletedMaintenance?.documents.map((document) => document.fileUrl) ?? [])
       state.maintenance = state.maintenance.filter((item) => item.id !== id)
+      if (deletedMaintenance) {
+        syncDemoCarServiceReturnDateFromLatestMaintenance(state, deletedMaintenance.carId)
+      }
       writeDemoState(user.id, state)
       return
+    }
+
+    const maintenanceResult = await table('maintenance').select('car_id').eq('id', id).maybeSingle()
+    if (maintenanceResult.error) {
+      throw new Error(maintenanceResult.error.message)
     }
 
     const documentsResult = await table('maintenance_documents').select('file_url').eq('maintenance_id', id)
@@ -1890,6 +2174,11 @@ export const dataService = {
     const { error } = await table('maintenance').delete().eq('id', id)
     if (error) {
       throw new Error(error.message)
+    }
+
+    const affectedCarId = maintenanceResult.data?.car_id
+    if (affectedCarId) {
+      await syncRemoteCarServiceReturnDateFromLatestMaintenance(affectedCarId)
     }
   },
 

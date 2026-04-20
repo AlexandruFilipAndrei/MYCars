@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { isAfter, isBefore, parseISO } from 'date-fns'
 import { Loader2, Pencil, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import { EmptyState, PageHeader } from '@/components/shared'
@@ -50,6 +51,7 @@ function rangesOverlap(startA: string, endA: string, startB: string, endB: strin
 
 export function RentalsPage() {
   const { cars, rentals, profile, incomingInvites, saveRental, deleteRental } = useAppStore()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [open, setOpen] = useState(false)
   const [editingRental, setEditingRental] = useState<Rental | null>(null)
   const [segment, setSegment] = useState<SegmentDraft>(defaultSegment)
@@ -153,11 +155,17 @@ export function RentalsPage() {
     })),
   )
 
-  const resetDialog = () => {
+  const resetDialog = (preferredCarId?: string) => {
+    const nextCarId =
+      (preferredCarId && editableCars.some((car) => car.id === preferredCarId) ? preferredCarId : undefined) ??
+      creatableCars[0]?.id ??
+      editableCars[0]?.id ??
+      ''
+
     setEditingRental(null)
     setSegment(defaultSegment)
     form.reset({
-      carId: creatableCars[0]?.id ?? editableCars[0]?.id ?? '',
+      carId: nextCarId,
       renterName: '',
       renterSurname: '',
       renterCnp: '',
@@ -172,8 +180,8 @@ export function RentalsPage() {
     })
   }
 
-  const openCreate = () => {
-    resetDialog()
+  const openCreate = (preferredCarId?: unknown) => {
+    resetDialog(typeof preferredCarId === 'string' ? preferredCarId : undefined)
     setOpen(true)
   }
 
@@ -290,6 +298,43 @@ export function RentalsPage() {
       toast.error(error instanceof Error ? error.message : 'Nu am putut salva închirierea.')
     }
   })
+
+  useEffect(() => {
+    if (searchParams.get('action') !== 'create') {
+      return
+    }
+
+    const requestedCarId = searchParams.get('carId') ?? undefined
+    const preferredCarId = creatableCars.some((car) => car.id === requestedCarId) ? requestedCarId : undefined
+    const fallbackCarId = preferredCarId ?? creatableCars[0]?.id ?? editableCars[0]?.id
+
+    if (!fallbackCarId) {
+      return
+    }
+
+    setEditingRental(null)
+    setSegment(defaultSegment)
+    form.reset({
+      carId: fallbackCarId,
+      renterName: '',
+      renterSurname: '',
+      renterCnp: '',
+      startDate: initialDate,
+      endDate: initialDate,
+      advancePayment: 0,
+      status: 'active',
+      kmStart: undefined,
+      kmEnd: undefined,
+      notes: '',
+      segments: [],
+    })
+    setOpen(true)
+
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('action')
+    nextParams.delete('carId')
+    setSearchParams(nextParams, { replace: true })
+  }, [creatableCars, editableCars, form, searchParams, setSearchParams])
 
   return (
     <div className="space-y-6">

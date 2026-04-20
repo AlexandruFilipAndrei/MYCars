@@ -6,12 +6,23 @@ import { PageHeader } from '@/components/shared'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { calculateRentalTotal, compareDocumentsByExpiry, formatCurrency, formatDate, getDocumentUrgencyLabel, getStatusBadgeVariant, getStatusLabel } from '@/lib/format'
+import {
+  calculateRentalTotal,
+  compareDocumentsByExpiry,
+  formatCurrency,
+  formatDate,
+  getDocumentUrgency,
+  getDocumentUrgencyLabel,
+  getStatusBadgeVariant,
+  getStatusLabel,
+} from '@/lib/format'
 import { useAppStore } from '@/store/app-store'
 
 export function DashboardPage() {
   const { cars, documents, rentals, maintenance } = useAppStore()
-  const income = rentals.reduce((sum, rental) => sum + calculateRentalTotal(rental.segments), 0)
+  const income = rentals
+    .filter((rental) => rental.status !== 'cancelled')
+    .reduce((sum, rental) => sum + calculateRentalTotal(rental.segments), 0)
   const expenses = maintenance.reduce((sum, item) => sum + item.cost, 0)
 
   const stats = [
@@ -24,6 +35,7 @@ export function DashboardPage() {
   const sortedDocumentAlerts = useMemo(
     () =>
       [...documents]
+        .filter((document) => getDocumentUrgency(document.expiryDate) !== 'ok')
         .sort((first, second) => compareDocumentsByExpiry(first.expiryDate, second.expiryDate))
         .slice(0, 4)
         .map((document) => ({

@@ -7,32 +7,92 @@ import { EmptyState, PageHeader, SearchInput } from '@/components/shared'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { canEditCar } from '@/lib/fleet-access'
-import { getStatusBadgeVariant, getStatusLabel } from '@/lib/format'
+import { formatDate, getStatusBadgeVariant, getStatusLabel } from '@/lib/format'
 import { useAppStore } from '@/store/app-store'
-import type { CarStatus } from '@/types/models'
+import type { Car, CarStatus, Maintenance } from '@/types/models'
+
+const statusOrder: Record<CarStatus, number> = {
+  available: 0,
+  maintenance: 1,
+  rented: 2,
+  archived: 3,
+}
 
 export function CarsPage() {
-  const { cars, profile, incomingInvites, deleteCar } = useAppStore()
+  const { cars, maintenance, profile, incomingInvites, deleteCar } = useAppStore()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<'all' | CarStatus>('all')
+  const [carToDelete, setCarToDelete] = useState<Car | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const latestMaintenanceByCarId = useMemo(() => {
+    const sortedMaintenance = [...maintenance].sort((first, second) => {
+      if (first.datePerformed !== second.datePerformed) {
+        return second.datePerformed.localeCompare(first.datePerformed)
+      }
+
+      return second.createdAt.localeCompare(first.createdAt)
+    })
+
+    return sortedMaintenance.reduce<Map<string, Maintenance>>((map, item) => {
+      if (!map.has(item.carId)) {
+        map.set(item.carId, item)
+      }
+
+      return map
+    }, new Map())
+  }, [maintenance])
 
   const filteredCars = useMemo(() => {
-    return cars.filter((car) => {
-      const matchesQuery = [car.brand, car.model, car.licensePlate, car.color].join(' ').toLowerCase().includes(query.toLowerCase())
-      const matchesStatus = status === 'all' ? true : car.status === status
-      return matchesQuery && matchesStatus
-    })
-  }, [cars, query, status])
+    return [...cars]
+      .filter((car) => {
+        const matchesQuery = [car.brand, car.model, car.licensePlate, car.color]
+          .join(' ')
+          .toLowerCase()
+          .includes(query.toLowerCase())
+        const matchesStatus = status === 'all' ? true : car.status === status
+        return matchesQuery && matchesStatus
+      })
+      .sort((first, second) => {
+        const firstStatusOrder = statusOrder[first.status]
+        const secondStatusOrder = statusOrder[second.status]
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Sigur vrei să ștergi această mașină?')) return
+        if (firstStatusOrder !== secondStatusOrder) {
+          return firstStatusOrder - secondStatusOrder
+        }
+
+        if (first.status === 'maintenance' && second.status === 'maintenance') {
+          const firstExpectedDate = first.serviceReturnDate ?? latestMaintenanceByCarId.get(first.id)?.expectedCompletionDate
+          const secondExpectedDate = second.serviceReturnDate ?? latestMaintenanceByCarId.get(second.id)?.expectedCompletionDate
+
+          if (firstExpectedDate && secondExpectedDate && firstExpectedDate !== secondExpectedDate) {
+            return firstExpectedDate.localeCompare(secondExpectedDate)
+          }
+
+          if (firstExpectedDate && !secondExpectedDate) return -1
+          if (!firstExpectedDate && secondExpectedDate) return 1
+        }
+
+        return first.licensePlate.localeCompare(second.licensePlate, 'ro-RO')
+      })
+  }, [cars, latestMaintenanceByCarId, query, status])
+
+  const handleDelete = async () => {
+    if (!carToDelete) {
+      return
+    }
 
     try {
-      await deleteCar(id)
-      toast.success('Șters cu succes')
+      setIsDeleting(true)
+      await deleteCar(carToDelete.id)
+      toast.success('Mașina a fost ștearsă.')
+      setCarToDelete(null)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Nu am putut șterge mașina.')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -60,8 +120,8 @@ export function CarsPage() {
           >
             <option value="all">Toate statusurile</option>
             <option value="available">Disponibilă</option>
-            <option value="rented">Închiriată</option>
             <option value="maintenance">Service</option>
+            <option value="rented">Închiriată</option>
             <option value="archived">Arhivată</option>
           </select>
         </CardContent>
@@ -73,16 +133,23 @@ export function CarsPage() {
         <div className="grid gap-4 xl:grid-cols-2">
           {filteredCars.map((car) => {
             const canEdit = canEditCar(profile, incomingInvites, car)
+            const currentMaintenance = latestMaintenanceByCarId.get(car.id)
+            const serviceAvailabilityDate = car.serviceReturnDate ?? currentMaintenance?.expectedCompletionDate
 
             return (
               <Card key={car.id}>
                 <CardContent className="space-y-4 p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <Link to={`/masini/${car.id}`} className="font-display text-2xl font-bold hover:text-primary">
                         {car.brand} {car.model}
                       </Link>
                       <p className="text-sm text-muted-foreground">{car.licensePlate}</p>
+                      {car.status === 'maintenance' && serviceAvailabilityDate ? (
+                        <p className="mt-1 text-sm font-medium text-amber-700 dark:text-amber-300">
+                          Disponibilă estimat la: {formatDate(serviceAvailabilityDate)}
+                        </p>
+                      ) : null}
                     </div>
                     <Badge variant={getStatusBadgeVariant(car.status)}>{getStatusLabel(car.status)}</Badge>
                   </div>
@@ -106,7 +173,7 @@ export function CarsPage() {
                             Editează
                           </Button>
                         </Link>
-                        <Button variant="destructive" onClick={() => void handleDelete(car.id)}>
+                        <Button variant="destructive" onClick={() => setCarToDelete(car)}>
                           <Trash2 className="h-4 w-4" />
                           Șterge
                         </Button>
@@ -119,6 +186,34 @@ export function CarsPage() {
           })}
         </div>
       )}
+
+      <Dialog open={Boolean(carToDelete)} onOpenChange={(next) => (!next && !isDeleting ? setCarToDelete(null) : null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Confirmă ștergerea mașinii</DialogTitle>
+            <DialogDescription>
+              {carToDelete
+                ? `Vei șterge definitiv ${carToDelete.brand} ${carToDelete.model} (${carToDelete.licensePlate}) din flotă.`
+                : 'Confirmă ștergerea mașinii selectate.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-foreground">
+              Această acțiune este permanentă și va șterge și documentele, pozele, închirierile și reparațiile asociate mașinii.
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setCarToDelete(null)} disabled={isDeleting}>
+                Anulează
+              </Button>
+              <Button type="button" variant="destructive" onClick={() => void handleDelete()} disabled={isDeleting}>
+                {isDeleting ? 'Se șterge...' : 'Confirmă ștergerea'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

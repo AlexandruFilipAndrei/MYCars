@@ -74,6 +74,7 @@ export interface Car {
   purchasePrice?: number
   purchaseCurrency: CurrencyCode
   notes?: string
+  serviceReturnDate?: string
   currentKm: number
   archivedAt?: string
   createdAt: string
@@ -135,6 +136,7 @@ export interface Maintenance {
   description: string
   cost: number
   datePerformed: string
+  expectedCompletionDate?: string
   kmAtService?: number
   notes?: string
   createdAt: string

@@ -62,20 +62,46 @@ export const carSchema = z.object({
   purchaseCurrency: currencySchema.default('RON'),
   currentKm: z.coerce.number().min(0, 'Kilometrajul nu poate fi negativ.'),
   notes: z.string().optional(),
+  serviceReturnDate: z.preprocess(
+    (value) => (value === '' || value === null || value === undefined ? undefined : value),
+    z.string().optional(),
+  ),
   itpExpiryDate: z.string().min(1, 'Acest câmp este obligatoriu.'),
   rcaExpiryDate: z.string().min(1, 'Acest câmp este obligatoriu.'),
+}).superRefine((value, context) => {
+  if (value.serviceReturnDate && value.status !== 'maintenance') {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Data de disponibilitate poate fi setată doar când mașina este în service.',
+      path: ['serviceReturnDate'],
+    })
+  }
 })
 
-export const maintenanceSchema = z.object({
-  carId: z.string().min(1, 'Selectați o opțiune.'),
-  type: z.enum(['repair', 'investment', 'service', 'other'], { message: 'Selectați o opțiune.' }),
-  description: z.string().trim().min(1, 'Acest câmp este obligatoriu.').min(3, 'Titlul este obligatoriu.'),
-  cost: z.coerce.number().min(0, 'Costul nu poate fi negativ.'),
-  datePerformed: z.string().min(1, 'Acest câmp este obligatoriu.'),
-  kmAtService: optionalNumberSchema(z.coerce.number().min(0, 'Kilometrajul nu poate fi negativ.')),
-  notes: z.string().optional(),
-  markCarAsMaintenance: z.boolean().optional(),
-})
+export const maintenanceSchema = z
+  .object({
+    carId: z.string().min(1, 'Selectați o opțiune.'),
+    type: z.enum(['repair', 'investment', 'service', 'other'], { message: 'Selectați o opțiune.' }),
+    description: z.string().trim().min(1, 'Acest câmp este obligatoriu.').min(3, 'Titlul este obligatoriu.'),
+    cost: z.coerce.number().min(0, 'Costul nu poate fi negativ.'),
+    datePerformed: z.string().min(1, 'Acest câmp este obligatoriu.'),
+    expectedCompletionDate: z.preprocess(
+      (value) => (value === '' || value === null || value === undefined ? undefined : value),
+      z.string().optional(),
+    ),
+    kmAtService: optionalNumberSchema(z.coerce.number().min(0, 'Kilometrajul nu poate fi negativ.')),
+    notes: z.string().optional(),
+    markCarAsMaintenance: z.boolean().optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.expectedCompletionDate && value.expectedCompletionDate < value.datePerformed) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Data estimată de ieșire din service nu poate fi înaintea datei intervenției.',
+        path: ['expectedCompletionDate'],
+      })
+    }
+  })
 
 export const rentalSegmentSchema = z
   .object({

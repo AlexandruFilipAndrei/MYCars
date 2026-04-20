@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2, Pencil, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import { FileDropzone } from '@/components/file-dropzone'
@@ -22,8 +23,11 @@ import { useAppStore } from '@/store/app-store'
 type MaintenanceValues = z.input<typeof maintenanceSchema>
 type MaintenanceSubmitValues = z.output<typeof maintenanceSchema>
 
+const today = new Date().toISOString().slice(0, 10)
+
 export function MaintenancePage() {
   const { cars, rentals, maintenance, profile, incomingInvites, saveMaintenance, deleteMaintenance } = useAppStore()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [documentFiles, setDocumentFiles] = useState<File[]>([])
@@ -51,18 +55,22 @@ export function MaintenancePage() {
       type: 'service',
       description: '',
       cost: 0,
-      datePerformed: new Date().toISOString().slice(0, 10),
+      datePerformed: today,
+      expectedCompletionDate: '',
       kmAtService: undefined,
       notes: '',
       markCarAsMaintenance: false,
     },
   })
+
   const selectedCarId = form.watch('carId')
+  const markCarAsMaintenance = form.watch('markCarAsMaintenance')
   const selectedCar = useMemo(() => cars.find((car) => car.id === selectedCarId), [cars, selectedCarId])
   const selectedCarHasActiveRental = useMemo(
     () => rentals.some((rental) => rental.carId === selectedCarId && rental.status === 'active'),
     [rentals, selectedCarId],
   )
+  const showExpectedCompletionField = Boolean(editingId || markCarAsMaintenance || selectedCar?.status === 'maintenance')
 
   useEffect(() => {
     if ((selectedCar?.status === 'archived' || selectedCarHasActiveRental) && form.getValues('markCarAsMaintenance')) {
@@ -70,15 +78,22 @@ export function MaintenancePage() {
     }
   }, [form, selectedCar?.status, selectedCarHasActiveRental])
 
-  const resetForm = () => {
+  const resetForm = (preferredCarId?: string) => {
+    const nextCarId =
+      (preferredCarId && editableCars.some((car) => car.id === preferredCarId) ? preferredCarId : undefined) ??
+      editableCars[0]?.id ??
+      cars[0]?.id ??
+      ''
+
     setEditingId(null)
     setDocumentFiles([])
     form.reset({
-      carId: editableCars[0]?.id ?? cars[0]?.id ?? '',
+      carId: nextCarId,
       type: 'service',
       description: '',
       cost: 0,
-      datePerformed: new Date().toISOString().slice(0, 10),
+      datePerformed: today,
+      expectedCompletionDate: '',
       kmAtService: undefined,
       notes: '',
       markCarAsMaintenance: false,
@@ -95,6 +110,40 @@ export function MaintenancePage() {
       toast.error(error instanceof Error ? error.message : 'Nu am putut salva intervenția.')
     }
   })
+
+  useEffect(() => {
+    if (searchParams.get('action') !== 'create') {
+      return
+    }
+
+    const requestedCarId = searchParams.get('carId') ?? undefined
+    const preferredCarId = editableCars.some((car) => car.id === requestedCarId) ? requestedCarId : undefined
+    const fallbackCarId = preferredCarId ?? editableCars[0]?.id ?? cars[0]?.id
+
+    if (!fallbackCarId) {
+      return
+    }
+
+    setEditingId(null)
+    setDocumentFiles([])
+    form.reset({
+      carId: fallbackCarId,
+      type: 'service',
+      description: '',
+      cost: 0,
+      datePerformed: today,
+      expectedCompletionDate: '',
+      kmAtService: undefined,
+      notes: '',
+      markCarAsMaintenance: false,
+    })
+    setOpen(true)
+
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('action')
+    nextParams.delete('carId')
+    setSearchParams(nextParams, { replace: true })
+  }, [cars, editableCars, form, searchParams, setSearchParams])
 
   return (
     <div className="space-y-6">
@@ -134,9 +183,15 @@ export function MaintenancePage() {
                     </div>
                     <p className="shrink-0 font-semibold text-primary">{formatCurrency(item.cost)}</p>
                   </div>
+
                   <p className="text-sm text-muted-foreground">Data: {formatDate(item.datePerformed)}</p>
-                  <p className="text-sm text-muted-foreground">Tip: {item.type}</p>
+                  {item.expectedCompletionDate ? (
+                    <p className="text-sm text-muted-foreground">Disponibilă estimat la: {formatDate(item.expectedCompletionDate)}</p>
+                  ) : null}
+                  <p className="text-sm text-muted-foreground">Tip: {getMaintenanceTypeLabel(item.type)}</p>
+
                   {item.notes ? <p className="break-words rounded-2xl bg-muted p-3 text-sm">{item.notes}</p> : null}
+
                   {item.documents.length > 0 ? (
                     <div className="space-y-2 rounded-2xl border p-3">
                       {[...item.documents].sort((first, second) => second.createdAt.localeCompare(first.createdAt)).map((document) => (
@@ -146,8 +201,9 @@ export function MaintenancePage() {
                       ))}
                     </div>
                   ) : null}
+
                   {canEdit ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         onClick={() => {
@@ -158,6 +214,7 @@ export function MaintenancePage() {
                             description: item.description,
                             cost: item.cost,
                             datePerformed: item.datePerformed,
+                            expectedCompletionDate: item.expectedCompletionDate ?? '',
                             kmAtService: item.kmAtService,
                             notes: item.notes ?? '',
                             markCarAsMaintenance: false,
@@ -205,6 +262,7 @@ export function MaintenancePage() {
             <DialogTitle>{editingId ? 'Editează intervenția' : 'Adaugă intervenție'}</DialogTitle>
             <DialogDescription>Introdu costul, informațiile relevante și fișierele justificative.</DialogDescription>
           </DialogHeader>
+
           <form className="space-y-4" onSubmit={onSubmit}>
             <Field label="Mașină" required error={form.formState.errors.carId?.message}>
               <select className={fieldClass(Boolean(form.formState.errors.carId))} {...form.register('carId')}>
@@ -216,6 +274,7 @@ export function MaintenancePage() {
                 ))}
               </select>
             </Field>
+
             <Field label="Tip" required error={form.formState.errors.type?.message}>
               <select className={fieldClass(Boolean(form.formState.errors.type))} {...form.register('type')}>
                 <option value="repair">Reparație</option>
@@ -224,39 +283,62 @@ export function MaintenancePage() {
                 <option value="other">Altele</option>
               </select>
             </Field>
+
             <Field label="Titlu" required error={form.formState.errors.description?.message}>
               <Input
                 className={fieldClass(Boolean(form.formState.errors.description))}
                 {...form.register('description')}
-                placeholder="Ex: Schimb ambreiaj, Revizie completa"
+                placeholder="Ex: Schimb ambreiaj, revizie completă"
               />
             </Field>
+
             <Field label="Cost" required error={form.formState.errors.cost?.message}>
               <Input className={fieldClass(Boolean(form.formState.errors.cost))} type="number" {...form.register('cost')} />
             </Field>
+
             <Field label="Data intervenției" required error={form.formState.errors.datePerformed?.message}>
               <Input className={fieldClass(Boolean(form.formState.errors.datePerformed))} type="date" {...form.register('datePerformed')} />
             </Field>
+
+            {showExpectedCompletionField ? (
+              <Field label="Disponibilă estimat la" error={form.formState.errors.expectedCompletionDate?.message}>
+                <Input
+                  className={fieldClass(Boolean(form.formState.errors.expectedCompletionDate))}
+                  type="date"
+                  {...form.register('expectedCompletionDate')}
+                />
+              </Field>
+            ) : null}
+
             <Field label="Kilometraj">
               <Input type="number" {...form.register('kmAtService')} />
             </Field>
+
             <Field label="Detalii suplimentare">
               <Textarea {...form.register('notes')} />
             </Field>
+
             <label className="flex items-center gap-2 text-sm font-medium">
               <input
                 type="checkbox"
                 disabled={selectedCar?.status === 'archived' || selectedCarHasActiveRental}
                 {...form.register('markCarAsMaintenance')}
               />
-              Marchează mașina ca în service
+              Marchează mașina ca fiind în service
             </label>
+
             {selectedCar?.status === 'archived' ? (
               <p className="text-sm text-muted-foreground">O mașină arhivată nu poate fi trecută în service.</p>
             ) : null}
+
             {selectedCarHasActiveRental ? (
               <p className="text-sm text-muted-foreground">Mașina nu poate fi trecută în service cât timp are o închiriere activă.</p>
             ) : null}
+
+            {showExpectedCompletionField ? (
+              <p className="text-sm text-muted-foreground">Completează doar dacă știi aproximativ când iese mașina din service.</p>
+            ) : null}
+
             <FileDropzone
               label="Încarcă facturi, poze sau PDF-uri"
               files={documentFiles}
@@ -264,6 +346,7 @@ export function MaintenancePage() {
               hint="Poți încărca imagini și PDF-uri."
               onChange={setDocumentFiles}
             />
+
             <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {form.formState.isSubmitting ? 'Se salvează...' : 'Salvează'}
@@ -300,4 +383,13 @@ function Field({
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   )
+}
+
+function getMaintenanceTypeLabel(type: MaintenanceSubmitValues['type']) {
+  return {
+    repair: 'Reparație',
+    investment: 'Investiție',
+    service: 'Service',
+    other: 'Altele',
+  }[type]
 }

@@ -94,6 +94,9 @@ interface AppState {
     },
   ) => Promise<void>
   deleteCar: (id: string) => Promise<void>
+  updateCarNotes: (id: string, notes: string) => Promise<void>
+  deleteCarDocument: (id: string) => Promise<void>
+  deleteCarPhoto: (id: string) => Promise<void>
   saveRental: (input: Omit<Rental, 'id' | 'createdAt' | 'updatedAt' | 'photos'> & { id?: string }) => Promise<void>
   deleteRental: (id: string) => Promise<void>
   saveMaintenance: (
@@ -195,6 +198,52 @@ export const useAppStore = create<AppState>((set) => {
               rentals: state.rentals.filter((item) => item.carId !== id),
               maintenance: state.maintenance.filter((item) => item.carId !== id),
               notifications: state.notifications.filter((item) => item.carId !== id),
+            },
+      )
+      void refreshUserData(current, { showLoading: false })
+    },
+
+    async updateCarNotes(id, notes) {
+      const { profile: current } = useAppStore.getState()
+      if (!current) return
+      const savedCar = await dataService.updateCarNotes(current, id, notes)
+      set((state) =>
+        state.activeUserId !== current.id
+          ? state
+          : {
+              ...state,
+              cars: upsertById(state.cars, savedCar),
+            },
+      )
+      void refreshUserData(current, { showLoading: false })
+    },
+
+    async deleteCarDocument(id) {
+      const { profile: current } = useAppStore.getState()
+      if (!current) return
+      await dataService.deleteCarDocument(current, id)
+      set((state) =>
+        state.activeUserId !== current.id
+          ? state
+          : {
+              ...state,
+              documents: state.documents.filter((item) => item.id !== id),
+              notifications: state.notifications.filter((item) => item.documentId !== id),
+            },
+      )
+      void refreshUserData(current, { showLoading: false })
+    },
+
+    async deleteCarPhoto(id) {
+      const { profile: current } = useAppStore.getState()
+      if (!current) return
+      await dataService.deleteCarPhoto(current, id)
+      set((state) =>
+        state.activeUserId !== current.id
+          ? state
+          : {
+              ...state,
+              carPhotos: state.carPhotos.filter((item) => item.id !== id),
             },
       )
       void refreshUserData(current, { showLoading: false })

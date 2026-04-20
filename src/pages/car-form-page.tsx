@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { FileText, Loader2, Plus, Trash2 } from 'lucide-react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { z } from 'zod'
 
@@ -41,6 +41,7 @@ const additionalDocumentTypeOptions: Array<{ value: AdditionalDocumentType; labe
 ]
 
 export function CarFormPage() {
+  const location = useLocation()
   const navigate = useNavigate()
   const { id } = useParams()
   const { cars, documents, rentals, profile, incomingInvites, saveCar, isLoading } = useAppStore()
@@ -97,6 +98,7 @@ export function CarFormPage() {
       purchaseCurrency: currentCar?.purchaseCurrency ?? 'RON',
       currentKm: currentCar?.currentKm ?? 0,
       notes: currentCar?.notes ?? '',
+      serviceReturnDate: currentCar?.serviceReturnDate ?? '',
       itpExpiryDate: currentItp?.expiryDate ?? '',
       rcaExpiryDate: currentRca?.expiryDate ?? '',
     }),
@@ -107,6 +109,7 @@ export function CarFormPage() {
     resolver: zodResolver(carSchema),
     defaultValues,
   })
+  const selectedStatus = form.watch('status')
 
   useEffect(() => {
     form.reset(defaultValues)
@@ -116,6 +119,29 @@ export function CarFormPage() {
     setAdditionalDocuments(defaultAdditionalDocuments)
     setDocumentError(null)
   }, [defaultAdditionalDocuments, defaultValues, form])
+
+  useEffect(() => {
+    if (selectedStatus !== 'maintenance' && form.getValues('serviceReturnDate')) {
+      form.setValue('serviceReturnDate', '', {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      })
+    }
+  }, [form, selectedStatus])
+
+  useEffect(() => {
+    if (!location.hash) {
+      return
+    }
+
+    const targetId = location.hash.slice(1)
+    const handle = window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+
+    return () => window.cancelAnimationFrame(handle)
+  }, [location.hash, currentCar?.id])
 
   if (isLoading) {
     return <div className="flex min-h-[50vh] items-center justify-center text-lg font-semibold">Se încarcă datele mașinii...</div>
@@ -273,6 +299,15 @@ export function CarFormPage() {
                 <option value="archived">Arhivata</option>
               </select>
             </Field>
+            {selectedStatus === 'maintenance' ? (
+              <Field label="Disponibila estimat la" error={form.formState.errors.serviceReturnDate?.message}>
+                <Input
+                  className={inputClass(Boolean(form.formState.errors.serviceReturnDate))}
+                  type="date"
+                  {...form.register('serviceReturnDate')}
+                />
+              </Field>
+            ) : null}
             {currentCar ? (
               <div className="md:col-span-2">
                 <p className="text-sm text-muted-foreground">
@@ -297,7 +332,7 @@ export function CarFormPage() {
               <Input className={inputClass(Boolean(form.formState.errors.currentKm))} type="number" {...form.register('currentKm')} />
             </Field>
 
-            <div className="md:col-span-2">
+            <div id="poze-masina" className="md:col-span-2">
               <Field label="Poze mașină">
                 <FileDropzone
                   label="Încarcă poze pentru mașină"
@@ -309,7 +344,7 @@ export function CarFormPage() {
               </Field>
             </div>
 
-            <div className="space-y-4 rounded-3xl border p-5 md:col-span-2">
+            <div id="documente-masina" className="space-y-4 rounded-3xl border p-5 md:col-span-2">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold">Documente mașină</p>
@@ -466,7 +501,7 @@ export function CarFormPage() {
               {documentError ? <p className="text-sm text-destructive">{documentError}</p> : null}
             </div>
 
-            <div className="md:col-span-2">
+            <div id="note-masina" className="md:col-span-2">
               <Field label="Notițe">
                 <Textarea className={inputClass(false)} {...form.register('notes')} />
               </Field>
