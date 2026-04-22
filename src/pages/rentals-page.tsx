@@ -118,6 +118,8 @@ export function RentalsPage() {
   const selectedStatus = form.watch('status')
   const currentSegments = (form.watch('segments') as SegmentDraft[] | undefined) ?? []
   const hasSelectedRentalPeriod = Boolean(selectedStartDate && selectedEndDate)
+  const draftSegmentValid = Boolean(segment.startDate && segment.endDate && segment.pricePerUnit > 0)
+  const effectiveSegments = currentSegments.length > 0 ? currentSegments : draftSegmentValid ? [segment] : []
 
   useEffect(() => {
     if (editingRental || editableCars.length === 0) return
@@ -166,7 +168,7 @@ export function RentalsPage() {
   }, [form, hasConflict])
 
   const total = calculateRentalTotal(
-    currentSegments.map((item, index) => ({
+    effectiveSegments.map((item, index) => ({
       ...item,
       id: String(index),
       rentalId: editingRental?.id ?? 'draft',
@@ -274,7 +276,6 @@ export function RentalsPage() {
       return
     }
 
-    const draftSegmentValid = segment.startDate && segment.endDate && segment.pricePerUnit > 0
     const segments = values.segments.length > 0 ? values.segments : draftSegmentValid ? [segment] : []
 
     if (segments.length === 0) {

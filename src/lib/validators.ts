@@ -133,7 +133,7 @@ export const rentalSchema = z
     kmStart: optionalNumberSchema(z.coerce.number().min(0, 'Kilometrajul nu poate fi negativ.')),
     kmEnd: optionalNumberSchema(z.coerce.number().min(0, 'Kilometrajul nu poate fi negativ.')),
     notes: z.string().optional(),
-    segments: z.array(rentalSegmentSchema).min(1, 'Vă rugăm să completați acest câmp.'),
+    segments: z.array(rentalSegmentSchema),
   })
   .superRefine((value, context) => {
     const seen = new Set<string>()

@@ -35,7 +35,7 @@ export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const { notifications, bootstrap, isLoading, profile } = useAppStore()
+  const { notifications, bootstrap, profile } = useAppStore()
   const { user, signOut, isDemo } = useAuthStore()
   const { isDark, setIsDark } = useDarkMode()
   const userId = user?.id ?? null
@@ -134,12 +134,8 @@ export function AppShell() {
           </header>
 
           <main className="min-w-0 flex-1 space-y-4 pb-6">
-            {shouldShowFleetFilter && !isLoading ? <FleetFilterBar /> : null}
-            {isLoading ? (
-              <div className="flex min-h-[50vh] items-center justify-center text-lg font-semibold">Se incarca datele contului...</div>
-            ) : (
-              <Outlet />
-            )}
+            {shouldShowFleetFilter ? <FleetFilterBar /> : null}
+            <Outlet />
           </main>
         </div>
 

@@ -48,17 +48,30 @@ export function FleetFilterProvider({ children }: { children: React.ReactNode })
   const { profile, incomingInvites } = useAppStore()
   const fleetOptions = useMemo(() => getAccessibleFleetOptions(profile, incomingInvites), [incomingInvites, profile])
   const allOwnerIds = useMemo(() => fleetOptions.map((option) => option.ownerId), [fleetOptions])
-  const [selectedOwnerIds, setSelectedOwnerIds] = useState<string[]>([])
-
-  useEffect(() => {
+  const selectionScope = profile ? `${profile.id}:${allOwnerIds.join('|')}` : 'anonymous'
+  const storedOwnerIds = useMemo(() => {
     if (!profile) {
-      setSelectedOwnerIds([])
-      return
+      return []
     }
 
-    const storedOwnerIds = readStoredOwnerIds(profile.id).filter((ownerId) => allOwnerIds.includes(ownerId))
-    setSelectedOwnerIds(storedOwnerIds.length > 0 ? storedOwnerIds : allOwnerIds)
+    return readStoredOwnerIds(profile.id).filter((ownerId) => allOwnerIds.includes(ownerId))
   }, [allOwnerIds, profile])
+  const [selectionState, setSelectionState] = useState<{ scope: string; ownerIds: string[] }>({
+    scope: '',
+    ownerIds: [],
+  })
+  const selectedOwnerIds = useMemo(() => {
+    if (!profile) {
+      return []
+    }
+
+    const scopedOwnerIds =
+      selectionState.scope === selectionScope
+        ? selectionState.ownerIds.filter((ownerId) => allOwnerIds.includes(ownerId))
+        : storedOwnerIds
+
+    return scopedOwnerIds.length > 0 ? scopedOwnerIds : allOwnerIds
+  }, [allOwnerIds, profile, selectionScope, selectionState.ownerIds, selectionState.scope, storedOwnerIds])
 
   useEffect(() => {
     if (!profile || selectedOwnerIds.length === 0) {
@@ -68,30 +81,42 @@ export function FleetFilterProvider({ children }: { children: React.ReactNode })
     writeStoredOwnerIds(profile.id, selectedOwnerIds)
   }, [profile, selectedOwnerIds])
 
-  const activeOwnerIds = selectedOwnerIds.length > 0 ? selectedOwnerIds : allOwnerIds
-
   const value = useMemo<FleetFilterContextValue>(
     () => ({
       fleetOptions,
-      selectedOwnerIds: activeOwnerIds,
-      isOwnerSelected: (ownerId) => activeOwnerIds.includes(ownerId),
-      matchesOwner: (ownerId) => activeOwnerIds.length === 0 || activeOwnerIds.includes(ownerId),
-      selectAll: () => setSelectedOwnerIds(allOwnerIds),
+      selectedOwnerIds,
+      isOwnerSelected: (ownerId) => selectedOwnerIds.includes(ownerId),
+      matchesOwner: (ownerId) => selectedOwnerIds.length === 0 || selectedOwnerIds.includes(ownerId),
+      selectAll: () =>
+        setSelectionState({
+          scope: selectionScope,
+          ownerIds: allOwnerIds,
+        }),
       toggleOwnerId: (ownerId) =>
-        setSelectedOwnerIds((current) => {
-          const baseSelection = current.length > 0 ? current : allOwnerIds
+        setSelectionState((current) => {
+          const currentSelection =
+            current.scope === selectionScope
+              ? current.ownerIds.filter((currentOwnerId) => allOwnerIds.includes(currentOwnerId))
+              : selectedOwnerIds
+          const baseSelection = currentSelection.length > 0 ? currentSelection : allOwnerIds
 
           if (baseSelection.includes(ownerId)) {
             const nextSelection = baseSelection.filter((currentOwnerId) => currentOwnerId !== ownerId)
-            return nextSelection.length > 0 ? nextSelection : baseSelection
+            return {
+              scope: selectionScope,
+              ownerIds: nextSelection.length > 0 ? nextSelection : baseSelection,
+            }
           }
 
-          return allOwnerIds.filter((currentOwnerId) => currentOwnerId === ownerId || baseSelection.includes(currentOwnerId))
+          return {
+            scope: selectionScope,
+            ownerIds: allOwnerIds.filter((currentOwnerId) => currentOwnerId === ownerId || baseSelection.includes(currentOwnerId)),
+          }
         }),
       getFleetOwnerName: (ownerId) => resolveFleetOwnerName(profile, incomingInvites, ownerId),
       getSharedFleetLabel: (ownerId) => resolveSharedFleetLabel(profile, incomingInvites, ownerId),
     }),
-    [activeOwnerIds, allOwnerIds, fleetOptions, incomingInvites, profile],
+    [allOwnerIds, fleetOptions, incomingInvites, profile, selectedOwnerIds, selectionScope],
   )
 
   return <FleetFilterContext.Provider value={value}>{children}</FleetFilterContext.Provider>

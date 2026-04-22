@@ -63,7 +63,7 @@ export function NotificationsPage() {
                     </div>
                   ) : null}
                   <p className="mt-2 text-sm text-muted-foreground">{item.message}</p>
-                  <p className="mt-2 text-xs uppercase tracking-wide text-muted-foreground">{formatDate(item.createdAt.slice(0, 10))}</p>
+                  <p className="mt-2 text-xs uppercase tracking-wide text-muted-foreground">{formatDate(item.createdAt)}</p>
                 </div>
                 {!item.isRead ? (
                   <Button variant="outline" onClick={() => void markNotificationAsRead(item.id)}>

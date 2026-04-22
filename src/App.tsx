@@ -15,22 +15,30 @@ const RentalsPage = lazy(() => import('@/pages/rentals-page').then((module) => (
 const SettingsPage = lazy(() => import('@/pages/settings-page').then((module) => ({ default: module.SettingsPage })))
 const StatisticsPage = lazy(() => import('@/pages/statistics-page').then((module) => ({ default: module.StatisticsPage })))
 
-function FullScreenLoader({ message }: { message: string }) {
-  return <div className="flex min-h-screen items-center justify-center text-lg font-semibold">{message}</div>
+function AppBootScreen() {
+  return (
+    <div className="page-shell" aria-hidden="true">
+      <aside className="glass-panel hidden w-72 shrink-0 p-4 md:block" />
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col gap-4 md:pl-0">
+        <div className="glass-panel sticky top-3 h-[74px] shrink-0" />
+        <div className="flex-1" />
+      </div>
+    </div>
+  )
 }
 
 function ProtectedRoute() {
   const { user, isLoading } = useAuthStore()
 
+  if (user) {
+    return <AppShell />
+  }
+
   if (isLoading) {
-    return <FullScreenLoader message="Se încarcă aplicația..." />
+    return <AppBootScreen />
   }
 
-  if (!user) {
-    return <Navigate to="/autentificare" replace />
-  }
-
-  return <AppShell />
+  return <Navigate to="/autentificare" replace />
 }
 
 export default function App() {
@@ -42,7 +50,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Suspense fallback={<FullScreenLoader message="Se încarcă aplicația..." />}>
+      <Suspense fallback={<AppBootScreen />}>
         <Routes>
           <Route path="/autentificare" element={<AuthPage />} />
           <Route element={<ProtectedRoute />}>

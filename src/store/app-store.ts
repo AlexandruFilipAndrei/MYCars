@@ -1,7 +1,21 @@
 import { create } from 'zustand'
 
 import { dataService } from '@/lib/data-service'
-import type { Car, CarDocument, CarPhoto, DocumentType, FleetAccess, Maintenance, NotificationItem, Profile, Rental } from '@/types/models'
+import type { Car, CarDocument, CarPhoto, DocumentType, FleetAccess, Maintenance, MaintenanceDocument, NotificationItem, Profile, Rental } from '@/types/models'
+
+type PersistedAppData = {
+  profile: Profile | null
+  cars: Car[]
+  carPhotos: CarPhoto[]
+  documents: CarDocument[]
+  rentals: Rental[]
+  maintenance: Maintenance[]
+  notifications: NotificationItem[]
+  invites: FleetAccess[]
+  incomingInvites: FleetAccess[]
+}
+
+const appCacheVersion = 1
 
 function createEmptyState(isLoading: boolean) {
   return {
@@ -17,6 +31,78 @@ function createEmptyState(isLoading: boolean) {
     incomingInvites: [] as FleetAccess[],
     isLoading,
   }
+}
+
+function getAppCacheKey(userId: string) {
+  return `mycars-app-cache-${userId}`
+}
+
+function pickPersistedAppData(source: PersistedAppData): PersistedAppData {
+  return {
+    profile: source.profile,
+    cars: source.cars,
+    carPhotos: source.carPhotos,
+    documents: source.documents,
+    rentals: source.rentals,
+    maintenance: source.maintenance,
+    notifications: source.notifications,
+    invites: source.invites,
+    incomingInvites: source.incomingInvites,
+  }
+}
+
+function readPersistedAppData(userId: string) {
+  try {
+    const rawValue = localStorage.getItem(getAppCacheKey(userId))
+
+    if (!rawValue) {
+      return null
+    }
+
+    const parsed = JSON.parse(rawValue) as { version?: number; state?: PersistedAppData } | null
+
+    if (!parsed || parsed.version !== appCacheVersion || !parsed.state) {
+      return null
+    }
+
+    return pickPersistedAppData(parsed.state)
+  } catch {
+    return null
+  }
+}
+
+function writePersistedAppData(userId: string, state: PersistedAppData) {
+  try {
+    localStorage.setItem(
+      getAppCacheKey(userId),
+      JSON.stringify({
+        version: appCacheVersion,
+        savedAt: new Date().toISOString(),
+        state: pickPersistedAppData(state),
+      }),
+    )
+  } catch {
+    // Ignore cache write errors and keep the app usable.
+  }
+}
+
+function mergeMaintenanceDocuments(maintenance: Maintenance[], maintenanceDocuments: MaintenanceDocument[]) {
+  const documentsByMaintenanceId = maintenanceDocuments.reduce<Map<string, MaintenanceDocument[]>>((map, document) => {
+    const currentDocuments = map.get(document.maintenanceId)
+
+    if (currentDocuments) {
+      currentDocuments.push(document)
+    } else {
+      map.set(document.maintenanceId, [document])
+    }
+
+    return map
+  }, new Map())
+
+  return maintenance.map((item) => ({
+    ...item,
+    documents: documentsByMaintenanceId.get(item.id) ?? item.documents ?? [],
+  }))
 }
 
 function upsertById<T extends { id: string }>(items: T[], nextItem: T) {
@@ -119,7 +205,7 @@ let bootstrapRequestId = 0
 export const useAppStore = create<AppState>((set) => {
   const refreshUserData = async (
     user: { id: string; email: string; fullName: string } | null,
-    options: { showLoading: boolean },
+    options: { showLoading: boolean; loadDeferredAssets?: boolean },
   ) => {
     if (!user) {
       set(createEmptyState(false))
@@ -128,9 +214,17 @@ export const useAppStore = create<AppState>((set) => {
 
     const requestId = ++bootstrapRequestId
     const currentState = useAppStore.getState()
+    const cachedState = readPersistedAppData(user.id)
+    const shouldLoadDeferredAssets = options.loadDeferredAssets ?? true
+    const isCurrentRequest = () => {
+      const state = useAppStore.getState()
+      return state.activeUserId === user.id && requestId === bootstrapRequestId
+    }
 
     if (options.showLoading) {
-      if (currentState.activeUserId !== user.id) {
+      if (cachedState) {
+        set({ ...cachedState, activeUserId: user.id, isLoading: false })
+      } else if (currentState.activeUserId !== user.id) {
         set({ ...createEmptyState(true), activeUserId: user.id })
       } else {
         set((state) => ({ ...state, isLoading: true }))
@@ -139,11 +233,64 @@ export const useAppStore = create<AppState>((set) => {
 
     try {
       const state = await dataService.bootstrap(user)
+
+      if (!isCurrentRequest()) {
+        return
+      }
+
+      const currentWithAssets = useAppStore.getState()
+      const mergedState = {
+        ...state,
+        carPhotos: currentWithAssets.carPhotos,
+        maintenance: state.maintenance.map((item) => ({
+          ...item,
+          documents: currentWithAssets.maintenance.find((currentItem) => currentItem.id === item.id)?.documents ?? [],
+        })),
+      }
+
+      writePersistedAppData(user.id, mergedState)
       set((current) =>
         current.activeUserId === user.id && requestId === bootstrapRequestId
-          ? { ...state, activeUserId: user.id, isLoading: false }
+          ? { ...mergedState, activeUserId: user.id, isLoading: false }
           : current,
       )
+
+      if (!shouldLoadDeferredAssets) {
+        return
+      }
+
+      void dataService
+        .loadDeferredAssets(user)
+        .then((deferredAssets) => {
+          set((current) => {
+            if (current.activeUserId !== user.id || requestId !== bootstrapRequestId) {
+              return current
+            }
+
+            const nextState = {
+              ...current,
+              carPhotos: deferredAssets.carPhotos,
+              maintenance: mergeMaintenanceDocuments(current.maintenance, deferredAssets.maintenanceDocuments),
+            }
+
+            writePersistedAppData(user.id, {
+              profile: nextState.profile,
+              cars: nextState.cars,
+              carPhotos: nextState.carPhotos,
+              documents: nextState.documents,
+              rentals: nextState.rentals,
+              maintenance: nextState.maintenance,
+              notifications: nextState.notifications,
+              invites: nextState.invites,
+              incomingInvites: nextState.incomingInvites,
+            })
+
+            return nextState
+          })
+        })
+        .catch(() => {
+          // Ignore deferred asset failures so the main app remains usable.
+        })
     } catch {
       if (!options.showLoading) {
         return
@@ -164,7 +311,7 @@ export const useAppStore = create<AppState>((set) => {
     },
 
     async bootstrap(user) {
-      await refreshUserData(user, { showLoading: true })
+      await refreshUserData(user, { showLoading: true, loadDeferredAssets: true })
     },
 
     async saveCar(input) {
@@ -180,7 +327,7 @@ export const useAppStore = create<AppState>((set) => {
               documents: syncMandatoryDocuments(state.documents, savedCar.id, input.itpExpiryDate, input.rcaExpiryDate),
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: Boolean(input.photoFiles?.length) })
     },
 
     async deleteCar(id) {
@@ -200,7 +347,7 @@ export const useAppStore = create<AppState>((set) => {
               notifications: state.notifications.filter((item) => item.carId !== id),
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async updateCarNotes(id, notes) {
@@ -215,7 +362,7 @@ export const useAppStore = create<AppState>((set) => {
               cars: upsertById(state.cars, savedCar),
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async deleteCarDocument(id) {
@@ -231,7 +378,7 @@ export const useAppStore = create<AppState>((set) => {
               notifications: state.notifications.filter((item) => item.documentId !== id),
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async deleteCarPhoto(id) {
@@ -246,7 +393,7 @@ export const useAppStore = create<AppState>((set) => {
               carPhotos: state.carPhotos.filter((item) => item.id !== id),
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async saveRental(input) {
@@ -261,7 +408,7 @@ export const useAppStore = create<AppState>((set) => {
               rentals: upsertById(state.rentals, savedRental),
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async deleteRental(id) {
@@ -276,7 +423,7 @@ export const useAppStore = create<AppState>((set) => {
               rentals: state.rentals.filter((item) => item.id !== id),
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async saveMaintenance(input) {
@@ -291,7 +438,7 @@ export const useAppStore = create<AppState>((set) => {
               maintenance: upsertById(state.maintenance, savedMaintenance),
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: Boolean(input.documentFiles?.length) })
     },
 
     async deleteMaintenance(id) {
@@ -306,13 +453,15 @@ export const useAppStore = create<AppState>((set) => {
               maintenance: state.maintenance.filter((item) => item.id !== id),
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async markNotificationAsRead(id) {
-      const current = useAppStore.getState().profile
-      if (!current) return
-      await dataService.markNotificationAsRead(current, id)
+      const state = useAppStore.getState()
+      const current = state.profile
+      const notification = state.notifications.find((item) => item.id === id)
+      if (!current || !notification) return
+      await dataService.markNotificationAsRead(current, notification)
       set((state) =>
         state.activeUserId !== current.id
           ? state
@@ -327,21 +476,21 @@ export const useAppStore = create<AppState>((set) => {
       const current = useAppStore.getState().profile
       if (!current) return
       await dataService.saveInvite(current, input)
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async acceptInvite(inviteId, ownerId) {
       const current = useAppStore.getState().profile
       if (!current) return
       await dataService.acceptInvite(current, inviteId, ownerId)
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async removeInvite(inviteId, ownerId) {
       const current = useAppStore.getState().profile
       if (!current) return
       await dataService.removeInvite(current, inviteId, ownerId)
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
     async saveProfile(profile) {
@@ -356,7 +505,28 @@ export const useAppStore = create<AppState>((set) => {
               profile,
             },
       )
-      void refreshUserData(current, { showLoading: false })
+      void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
   }
+})
+
+useAppStore.subscribe((state) => {
+  if (!state.activeUserId || !state.profile) {
+    return
+  }
+
+  writePersistedAppData(
+    state.activeUserId,
+    pickPersistedAppData({
+      profile: state.profile,
+      cars: state.cars,
+      carPhotos: state.carPhotos,
+      documents: state.documents,
+      rentals: state.rentals,
+      maintenance: state.maintenance,
+      notifications: state.notifications,
+      invites: state.invites,
+      incomingInvites: state.incomingInvites,
+    }),
+  )
 })

@@ -35,6 +35,11 @@ interface AppDataState {
   incomingInvites: FleetAccess[]
 }
 
+interface DeferredAssetsState {
+  carPhotos: CarPhoto[]
+  maintenanceDocuments: MaintenanceDocument[]
+}
+
 interface AppUser {
   id: string
   email: string
@@ -150,6 +155,18 @@ type RemoteFleetAccessRow = {
   role: FleetAccess['role'] | null
   accepted_at: string | null
   accepted_user_id?: string | null
+  created_at: string | null
+}
+
+type RemoteNotificationRow = {
+  id: string
+  user_id: string
+  car_id: string | null
+  document_id: string | null
+  title: string
+  message: string
+  type: NotificationItem['type'] | null
+  is_read: boolean | null
   created_at: string | null
 }
 
@@ -1293,26 +1310,40 @@ function writeReadNotificationIds(userId: string, ids: string[]) {
   localStorage.setItem(getNotificationReadKey(userId), JSON.stringify(ids))
 }
 
-function buildNotifications(documents: CarDocument[], userId: string) {
+function getNotificationCreatedAt(document: CarDocument) {
+  return document.expiryDate ? `${document.expiryDate}T00:00:00.000Z` : document.createdAt
+}
+
+function buildNotifications(documents: CarDocument[], userId: string, persistedNotifications: NotificationItem[] = []) {
   const readIds = new Set(readReadNotificationIds(userId))
+  const persistedNotificationsByKey = new Map(
+    persistedNotifications
+      .filter((item) => item.documentId)
+      .map((item) => [`${item.documentId}-${item.type}`, item] as const),
+  )
+
   return documents
     .map((document) => {
       const urgency = getDocumentUrgency(document.expiryDate)
       if (urgency === 'ok') return null
 
       const notificationId = `doc-${document.id}`
+      const persistedNotification = persistedNotificationsByKey.get(`${document.id}-${urgency}`)
+
       return {
-        id: notificationId,
-        userId,
-        carId: document.carId,
+        id: persistedNotification?.id ?? notificationId,
+        userId: persistedNotification?.userId ?? userId,
+        carId: persistedNotification?.carId ?? document.carId,
         documentId: document.id,
-        title: `${document.type} necesită atenție`,
-        message: document.expiryDate
-          ? `Documentul ${document.customName ?? document.type} expiră la ${document.expiryDate}.`
-          : `Documentul ${document.customName ?? document.type} nu are dată de expirare.`,
+        title: persistedNotification?.title ?? `${document.type} necesită atenție`,
+        message:
+          persistedNotification?.message ??
+          (document.expiryDate
+            ? `Documentul ${document.customName ?? document.type} expiră la ${document.expiryDate}.`
+            : `Documentul ${document.customName ?? document.type} nu are dată de expirare.`),
         type: urgency,
-        isRead: readIds.has(notificationId),
-        createdAt: new Date().toISOString(),
+        isRead: persistedNotification?.isRead ?? readIds.has(notificationId),
+        createdAt: persistedNotification?.createdAt ?? getNotificationCreatedAt(document),
       } satisfies NotificationItem
     })
     .filter(Boolean) as NotificationItem[]
@@ -1455,6 +1486,24 @@ function mapInvite(
   }
 }
 
+function mapNotification(row: RemoteNotificationRow): NotificationItem | null {
+  if (!row.type) {
+    return null
+  }
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    carId: row.car_id ?? undefined,
+    documentId: row.document_id ?? undefined,
+    title: row.title,
+    message: row.message,
+    type: row.type,
+    isRead: row.is_read ?? false,
+    createdAt: row.created_at ?? new Date().toISOString(),
+  }
+}
+
 function groupByStringKey<T>(items: T[], getKey: (item: T) => string) {
   const groups = new Map<string, T[]>()
 
@@ -1473,62 +1522,81 @@ function groupByStringKey<T>(items: T[], getKey: (item: T) => string) {
   return groups
 }
 
+async function loadRemoteDeferredAssets(): Promise<DeferredAssetsState> {
+  const [carPhotosResult, maintenanceDocumentsResult] = await Promise.all([
+    table('car_photos').select('*').order('created_at', { ascending: false }),
+    table('maintenance_documents').select('*').order('created_at', { ascending: false }),
+  ])
+
+  if (carPhotosResult.error || maintenanceDocumentsResult.error) {
+    throw new Error(carPhotosResult.error?.message || maintenanceDocumentsResult.error?.message || 'Nu am putut încărca fișierele auxiliare.')
+  }
+
+  const carPhotoRows = (carPhotosResult.data ?? []) as RemoteCarPhotoRow[]
+  const maintenanceDocumentRows = (maintenanceDocumentsResult.data ?? []) as RemoteMaintenanceDocumentRow[]
+  const [carPhotoUrlMap, maintenanceDocumentUrlMap] = await Promise.all([
+    createSignedUrlMap('car-photos', carPhotoRows.map((row) => row.file_url)),
+    createSignedUrlMap('maintenance-documents', maintenanceDocumentRows.map((row) => row.file_url)),
+  ])
+
+  return {
+    carPhotos: carPhotoRows.map((row) => {
+      const mapped = mapCarPhoto(row)
+      return {
+        ...mapped,
+        fileUrl: carPhotoUrlMap.get(mapped.fileUrl) ?? mapped.fileUrl,
+      }
+    }),
+    maintenanceDocuments: maintenanceDocumentRows.map((row) => {
+      const mapped = mapMaintenanceDocument(row)
+      return {
+        ...mapped,
+        fileUrl: maintenanceDocumentUrlMap.get(mapped.fileUrl) ?? mapped.fileUrl,
+      }
+    }),
+  }
+}
+
 async function bootstrapRemote(user: AppUser): Promise<AppDataState> {
-  const [profileResult, carsResult, carPhotosResult, documentsResult, rentalsResult, segmentsResult, maintenanceResult, maintenanceDocumentsResult, invitesResult] = await Promise.all([
+  const [profileResult, carsResult, documentsResult, rentalsResult, segmentsResult, maintenanceResult, invitesResult, notificationsResult] = await Promise.all([
     table('profiles').select('id, full_name, email, created_at').eq('id', user.id).maybeSingle(),
     table('cars').select('*').order('created_at', { ascending: false }),
-    table('car_photos').select('*').order('created_at', { ascending: false }),
     table('car_documents').select('*').order('created_at', { ascending: false }),
     table('rentals').select('*').order('created_at', { ascending: false }),
     table('rental_price_segments').select('*').order('created_at', { ascending: true }),
     table('maintenance').select('*').order('created_at', { ascending: false }),
-    table('maintenance_documents').select('*').order('created_at', { ascending: false }),
     table('fleet_access').select('*').order('created_at', { ascending: false }),
+    table('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
   ])
 
   if (
     profileResult.error ||
     carsResult.error ||
-    carPhotosResult.error ||
     documentsResult.error ||
     rentalsResult.error ||
     segmentsResult.error ||
     maintenanceResult.error ||
-    maintenanceDocumentsResult.error ||
-    invitesResult.error
+    invitesResult.error ||
+    notificationsResult.error
   ) {
     throw new Error(
       profileResult.error?.message ||
         carsResult.error?.message ||
-        carPhotosResult.error?.message ||
         documentsResult.error?.message ||
         rentalsResult.error?.message ||
         segmentsResult.error?.message ||
         maintenanceResult.error?.message ||
-        maintenanceDocumentsResult.error?.message ||
         invitesResult.error?.message ||
+        notificationsResult.error?.message ||
         'Nu am putut încărca datele din Supabase.',
     )
   }
 
-  const carPhotoRows = (carPhotosResult.data ?? []) as RemoteCarPhotoRow[]
   const documentRows = (documentsResult.data ?? []) as RemoteDocumentRow[]
-  const maintenanceDocumentRows = (maintenanceDocumentsResult.data ?? []) as RemoteMaintenanceDocumentRow[]
-  const [carPhotoUrlMap, documentUrlMap, maintenanceDocumentUrlMap] = await Promise.all([
-    createSignedUrlMap('car-photos', carPhotoRows.map((row) => row.file_url)),
-    createSignedUrlMap('car-documents', documentRows.map((row) => row.file_url)),
-    createSignedUrlMap('maintenance-documents', maintenanceDocumentRows.map((row) => row.file_url)),
-  ])
+  const documentUrlMap = await createSignedUrlMap('car-documents', documentRows.map((row) => row.file_url))
 
   const profile = mapProfile((profileResult.data as RemoteProfileRow | null) ?? null, user)
   const cars = ((carsResult.data ?? []) as RemoteCarRow[]).map(mapCar)
-  const carPhotos = carPhotoRows.map((row) => {
-    const mapped = mapCarPhoto(row)
-    return {
-      ...mapped,
-      fileUrl: carPhotoUrlMap.get(mapped.fileUrl) ?? mapped.fileUrl,
-    }
-  })
   const documents = documentRows.map((row) => {
     const mapped = mapDocument(row)
     return {
@@ -1539,17 +1607,9 @@ async function bootstrapRemote(user: AppUser): Promise<AppDataState> {
   const segments = ((segmentsResult.data ?? []) as RemoteSegmentRow[]).map(mapSegment)
   const segmentsByRentalId = groupByStringKey(segments, (segment) => segment.rentalId)
   const rentals = ((rentalsResult.data ?? []) as RemoteRentalRow[]).map((row) => mapRental(row, segmentsByRentalId.get(row.id) ?? []))
-  const maintenanceDocuments = maintenanceDocumentRows.map((document) => {
-    const mapped = mapMaintenanceDocument(document)
-    return {
-      ...mapped,
-      fileUrl: maintenanceDocumentUrlMap.get(mapped.fileUrl) ?? mapped.fileUrl,
-    }
-  })
-  const maintenanceDocumentsByMaintenanceId = groupByStringKey(maintenanceDocuments, (document) => document.maintenanceId)
   const maintenance = ((maintenanceResult.data ?? []) as RemoteMaintenanceRow[]).map((row) => ({
     ...mapMaintenance(row),
-    documents: maintenanceDocumentsByMaintenanceId.get(row.id) ?? [],
+    documents: [],
   }))
   const ownerIds = Array.from(new Set(((invitesResult.data ?? []) as RemoteFleetAccessRow[]).map((invite) => invite.owner_id)))
   const ownerProfilesResult =
@@ -1576,12 +1636,17 @@ async function bootstrapRemote(user: AppUser): Promise<AppDataState> {
   const fleetAccess = ((invitesResult.data ?? []) as RemoteFleetAccessRow[]).map((row) => mapInvite(row, ownerProfiles.get(row.owner_id)))
   const invites = fleetAccess.filter((invite) => invite.ownerId === user.id)
   const incomingInvites = fleetAccess.filter((invite) => normalizeEmail(invite.invitedEmail) === normalizeEmail(user.email))
-  const notifications = buildNotifications(documents, user.id)
+  const persistedNotifications = ((notificationsResult.data ?? []) as RemoteNotificationRow[])
+    .map(mapNotification)
+    .filter((notification): notification is NotificationItem => Boolean(notification))
+  const storedDocumentNotifications = persistedNotifications.filter((item) => item.documentId)
+  const extraNotifications = persistedNotifications.filter((item) => !item.documentId)
+  const notifications = [...extraNotifications, ...buildNotifications(documents, user.id, storedDocumentNotifications)]
 
   return {
     profile,
     cars,
-    carPhotos,
+    carPhotos: [],
     documents,
     rentals,
     maintenance,
@@ -1612,7 +1677,11 @@ export const dataService = {
       const state = readDemoState(user)
       const notifications = [
         ...state.notifications.filter((item) => !item.id.startsWith('doc-')),
-        ...buildNotifications(state.documents, state.profile.id),
+        ...buildNotifications(
+          state.documents,
+          state.profile.id,
+          state.notifications.filter((item) => Boolean(item.documentId)),
+        ),
       ]
       const nextState = { ...state, notifications }
       writeDemoState(user.id, nextState)
@@ -1620,6 +1689,18 @@ export const dataService = {
     }
 
     return bootstrapRemote(user)
+  },
+
+  async loadDeferredAssets(user: AppUser): Promise<DeferredAssetsState> {
+    if (isDemoUser(user)) {
+      const state = readDemoState(user)
+      return {
+        carPhotos: state.carPhotos,
+        maintenanceDocuments: state.maintenance.flatMap((item) => item.documents),
+      }
+    }
+
+    return loadRemoteDeferredAssets()
   },
 
   async saveCar(
@@ -2182,16 +2263,68 @@ export const dataService = {
     }
   },
 
-  async markNotificationAsRead(user: AppUser, id: string) {
+  async markNotificationAsRead(user: AppUser, notification: NotificationItem) {
     const currentIds = new Set(readReadNotificationIds(user.id))
-    currentIds.add(id)
+    currentIds.add(notification.id)
+    if (notification.documentId) {
+      currentIds.add(`doc-${notification.documentId}`)
+    }
     writeReadNotificationIds(user.id, [...currentIds])
 
     if (isDemoUser(user)) {
       const state = readDemoState(user)
-      state.notifications = state.notifications.map((item) => (item.id === id ? { ...item, isRead: true } : item))
+      state.notifications = state.notifications.map((item) => (item.id === notification.id ? { ...item, isRead: true } : item))
       writeDemoState(user.id, state)
       return
+    }
+
+    try {
+      if (notification.documentId) {
+        const existingNotificationResult = await table('notifications')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('document_id', notification.documentId)
+          .eq('type', notification.type)
+          .maybeSingle()
+
+        if (existingNotificationResult.error) {
+          throw new Error(existingNotificationResult.error.message)
+        }
+
+        if (existingNotificationResult.data?.id) {
+          const updateResult = await table('notifications').update({ is_read: true }).eq('id', existingNotificationResult.data.id)
+
+          if (updateResult.error) {
+            throw new Error(updateResult.error.message)
+          }
+        } else {
+          const insertResult = await table('notifications').insert({
+            user_id: user.id,
+            car_id: notification.carId ?? null,
+            document_id: notification.documentId,
+            title: notification.title,
+            message: notification.message,
+            type: notification.type,
+            is_read: true,
+          })
+
+          if (insertResult.error) {
+            throw new Error(insertResult.error.message)
+          }
+        }
+
+        return
+      }
+
+      if (!notification.id.startsWith('doc-')) {
+        const updateResult = await table('notifications').update({ is_read: true }).eq('id', notification.id)
+
+        if (updateResult.error) {
+          throw new Error(updateResult.error.message)
+        }
+      }
+    } catch {
+      // Keep the local read state even if the remote sync is not available yet.
     }
   },
 
