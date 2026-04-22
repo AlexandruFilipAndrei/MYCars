@@ -435,7 +435,13 @@ export const useAppStore = create<AppState>((set) => {
           ? state
           : {
               ...state,
-              maintenance: upsertById(state.maintenance, savedMaintenance),
+              maintenance: upsertById(state.maintenance, {
+                ...savedMaintenance,
+                documents:
+                  savedMaintenance.documents.length > 0
+                    ? savedMaintenance.documents
+                    : state.maintenance.find((item) => item.id === savedMaintenance.id)?.documents ?? [],
+              }),
             },
       )
       void refreshUserData(current, { showLoading: false, loadDeferredAssets: Boolean(input.documentFiles?.length) })
