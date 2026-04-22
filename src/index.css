@@ -65,6 +65,7 @@
   html {
     @apply scroll-smooth;
     overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
@@ -81,6 +82,14 @@
   #root {
     min-height: 100vh;
     overflow-x: hidden;
+  }
+
+  @media (max-width: 768px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
 }
 
