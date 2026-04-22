@@ -35,7 +35,8 @@ export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const { notifications, bootstrap, profile } = useAppStore()
+  const { notifications, bootstrap, carPhotos, cars, documents, incomingInvites, invites, isLoading, maintenance, profile, rentals } =
+    useAppStore()
   const { user, signOut, isDemo } = useAuthStore()
   const { isDark, setIsDark } = useDarkMode()
   const userId = user?.id ?? null
@@ -48,6 +49,17 @@ export function AppShell() {
 
   const unreadCount = useMemo(() => notifications.filter((item) => !item.isRead).length, [notifications])
   const shouldShowFleetFilter = ['/', '/masini', '/inchirieri', '/reparatii', '/statistici', '/notificari'].includes(location.pathname)
+  const hasBootstrappedContent =
+    Boolean(profile) ||
+    cars.length > 0 ||
+    carPhotos.length > 0 ||
+    documents.length > 0 ||
+    rentals.length > 0 ||
+    maintenance.length > 0 ||
+    notifications.length > 0 ||
+    invites.length > 0 ||
+    incomingInvites.length > 0
+  const showInitialLoadingState = isLoading && !hasBootstrappedContent
 
   return (
     <FleetFilterProvider>
@@ -134,8 +146,18 @@ export function AppShell() {
           </header>
 
           <main className="min-w-0 flex-1 space-y-4 pb-6">
-            {shouldShowFleetFilter ? <FleetFilterBar /> : null}
-            <Outlet />
+            {showInitialLoadingState ? (
+              <div className="flex min-h-[50vh] items-center justify-center px-4">
+                <div role="status" aria-live="polite" className="glass-panel px-5 py-3 text-sm font-medium text-muted-foreground">
+                  Se incarca datele...
+                </div>
+              </div>
+            ) : (
+              <>
+                {shouldShowFleetFilter ? <FleetFilterBar /> : null}
+                <Outlet />
+              </>
+            )}
           </main>
         </div>
 
