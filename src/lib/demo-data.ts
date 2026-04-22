@@ -214,7 +214,7 @@ export const demoMaintenance: Maintenance[] = [
   {
     id: 'mnt-1',
     carId: 'car-3',
-    type: 'service',
+    type: 'repair',
     description: 'Revizie completa + schimb ulei',
     cost: 1450,
     datePerformed: dateOffset(-1),

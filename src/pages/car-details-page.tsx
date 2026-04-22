@@ -3,13 +3,13 @@ import { FileImage, FileText, Loader2, Trash2 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
-import { EmptyState, PageHeader } from '@/components/shared'
+import { FleetOwnerBadge, EmptyState, PageHeader } from '@/components/shared'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { canEditCar } from '@/lib/fleet-access'
+import { canEditCar, getSharedFleetLabel } from '@/lib/fleet-access'
 import {
   calculateRentalTotal,
   compareDocumentsByExpiry,
@@ -101,6 +101,7 @@ export function CarDetailsPage() {
   }
 
   const canEdit = canEditCar(profile, incomingInvites, car)
+  const sharedFleetLabel = getSharedFleetLabel(profile, incomingInvites, car.ownerId)
   const infoItems = buildInfoItems(car)
 
   const handleSaveNotes = async () => {
@@ -186,6 +187,7 @@ export function CarDetailsPage() {
           <div>
             <p className="text-sm text-muted-foreground">Număr înmatriculare</p>
             <p className="font-display text-3xl font-bold">{car.licensePlate}</p>
+            <FleetOwnerBadge label={sharedFleetLabel} className="mt-2" />
           </div>
           <Badge variant={getStatusBadgeVariant(car.status)}>{getStatusLabel(car.status)}</Badge>
         </CardContent>
@@ -566,7 +568,6 @@ function getMaintenanceTypeLabel(type: Maintenance['type']) {
   return {
     repair: 'Reparație',
     investment: 'Investiție',
-    service: 'Service',
     other: 'Altele',
   }[type]
 }

@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-import { EmptyState, PageHeader, SearchInput } from '@/components/shared'
+import { FleetOwnerBadge, EmptyState, PageHeader, SearchInput } from '@/components/shared'
+import { useFleetFilter } from '@/components/fleet-filter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { canEditCar } from '@/lib/fleet-access'
+import { canEditCar, getSharedFleetLabel } from '@/lib/fleet-access'
 import { formatDate, getStatusBadgeVariant, getStatusLabel } from '@/lib/format'
 import { useAppStore } from '@/store/app-store'
 import type { Car, CarStatus, Maintenance } from '@/types/models'
@@ -22,6 +23,7 @@ const statusOrder: Record<CarStatus, number> = {
 
 export function CarsPage() {
   const { cars, maintenance, profile, incomingInvites, deleteCar } = useAppStore()
+  const { matchesOwner } = useFleetFilter()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<'all' | CarStatus>('all')
   const [carToDelete, setCarToDelete] = useState<Car | null>(null)
@@ -48,12 +50,11 @@ export function CarsPage() {
   const filteredCars = useMemo(() => {
     return [...cars]
       .filter((car) => {
-        const matchesQuery = [car.brand, car.model, car.licensePlate, car.color]
-          .join(' ')
-          .toLowerCase()
-          .includes(query.toLowerCase())
+        const matchesFleet = matchesOwner(car.ownerId)
+        const matchesQuery = [car.brand, car.model, car.licensePlate, car.color].join(' ').toLowerCase().includes(query.toLowerCase())
         const matchesStatus = status === 'all' ? true : car.status === status
-        return matchesQuery && matchesStatus
+
+        return matchesFleet && matchesQuery && matchesStatus
       })
       .sort((first, second) => {
         const firstStatusOrder = statusOrder[first.status]
@@ -77,7 +78,7 @@ export function CarsPage() {
 
         return first.licensePlate.localeCompare(second.licensePlate, 'ro-RO')
       })
-  }, [cars, latestMaintenanceByCarId, query, status])
+  }, [cars, latestMaintenanceByCarId, matchesOwner, query, status])
 
   const handleDelete = async () => {
     if (!carToDelete) {
@@ -87,10 +88,10 @@ export function CarsPage() {
     try {
       setIsDeleting(true)
       await deleteCar(carToDelete.id)
-      toast.success('Mașina a fost ștearsă.')
+      toast.success('Masina a fost stearsa.')
       setCarToDelete(null)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Nu am putut șterge mașina.')
+      toast.error(error instanceof Error ? error.message : 'Nu am putut sterge masina.')
     } finally {
       setIsDeleting(false)
     }
@@ -99,12 +100,12 @@ export function CarsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Mașini"
+        title="Masini"
         action={
           <Link to="/masini/nou">
             <Button>
               <Plus className="h-4 w-4" />
-              Adaugă mașină
+              Adauga masina
             </Button>
           </Link>
         }
@@ -112,29 +113,30 @@ export function CarsPage() {
 
       <Card>
         <CardContent className="grid gap-4 p-6 md:grid-cols-[1fr,220px]">
-          <SearchInput value={query} onChange={setQuery} placeholder="Caută după marcă, model sau număr..." />
+          <SearchInput value={query} onChange={setQuery} placeholder="Cauta dupa marca, model sau numar..." />
           <select
             value={status}
             onChange={(event) => setStatus(event.target.value as 'all' | CarStatus)}
             className="h-11 rounded-2xl border bg-card px-4 text-sm"
           >
             <option value="all">Toate statusurile</option>
-            <option value="available">Disponibilă</option>
+            <option value="available">Disponibila</option>
             <option value="maintenance">Service</option>
-            <option value="rented">Închiriată</option>
-            <option value="archived">Arhivată</option>
+            <option value="rented">Inchiriata</option>
+            <option value="archived">Arhivata</option>
           </select>
         </CardContent>
       </Card>
 
       {filteredCars.length === 0 ? (
-        <EmptyState title="Nu am găsit mașini" description="Încearcă alt filtru sau adaugă prima mașină în flotă." />
+        <EmptyState title="Nu am gasit masini" description="Incearca alt filtru sau adauga prima masina in flota." />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {filteredCars.map((car) => {
             const canEdit = canEditCar(profile, incomingInvites, car)
             const currentMaintenance = latestMaintenanceByCarId.get(car.id)
             const serviceAvailabilityDate = car.serviceReturnDate ?? currentMaintenance?.expectedCompletionDate
+            const sharedFleetLabel = getSharedFleetLabel(profile, incomingInvites, car.ownerId)
 
             return (
               <Card key={car.id}>
@@ -145,9 +147,10 @@ export function CarsPage() {
                         {car.brand} {car.model}
                       </Link>
                       <p className="text-sm text-muted-foreground">{car.licensePlate}</p>
+                      <FleetOwnerBadge label={sharedFleetLabel} className="mt-2" />
                       {car.status === 'maintenance' && serviceAvailabilityDate ? (
                         <p className="mt-1 text-sm font-medium text-amber-700 dark:text-amber-300">
-                          Disponibilă estimat la: {formatDate(serviceAvailabilityDate)}
+                          Disponibila estimat la: {formatDate(serviceAvailabilityDate)}
                         </p>
                       ) : null}
                     </div>
@@ -170,12 +173,12 @@ export function CarsPage() {
                         <Link to={`/masini/${car.id}/editeaza`}>
                           <Button variant="outline">
                             <Pencil className="h-4 w-4" />
-                            Editează
+                            Editeaza
                           </Button>
                         </Link>
                         <Button variant="destructive" onClick={() => setCarToDelete(car)}>
                           <Trash2 className="h-4 w-4" />
-                          Șterge
+                          Sterge
                         </Button>
                       </>
                     ) : null}
@@ -190,25 +193,25 @@ export function CarsPage() {
       <Dialog open={Boolean(carToDelete)} onOpenChange={(next) => (!next && !isDeleting ? setCarToDelete(null) : null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Confirmă ștergerea mașinii</DialogTitle>
+            <DialogTitle>Confirma stergerea masinii</DialogTitle>
             <DialogDescription>
               {carToDelete
-                ? `Vei șterge definitiv ${carToDelete.brand} ${carToDelete.model} (${carToDelete.licensePlate}) din flotă.`
-                : 'Confirmă ștergerea mașinii selectate.'}
+                ? `Vei sterge definitiv ${carToDelete.brand} ${carToDelete.model} (${carToDelete.licensePlate}) din flota.`
+                : 'Confirma stergerea masinii selectate.'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-foreground">
-              Această acțiune este permanentă și va șterge și documentele, pozele, închirierile și reparațiile asociate mașinii.
+              Aceasta actiune este permanenta si va sterge si documentele, pozele, inchirierile si reparatiile asociate masinii.
             </div>
 
             <div className="flex flex-wrap justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => setCarToDelete(null)} disabled={isDeleting}>
-                Anulează
+                Anuleaza
               </Button>
               <Button type="button" variant="destructive" onClick={() => void handleDelete()} disabled={isDeleting}>
-                {isDeleting ? 'Se șterge...' : 'Confirmă ștergerea'}
+                {isDeleting ? 'Se sterge...' : 'Confirma stergerea'}
               </Button>
             </div>
           </div>

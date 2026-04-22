@@ -81,7 +81,7 @@ export const carSchema = z.object({
 export const maintenanceSchema = z
   .object({
     carId: z.string().min(1, 'Selectați o opțiune.'),
-    type: z.enum(['repair', 'investment', 'service', 'other'], { message: 'Selectați o opțiune.' }),
+    type: z.enum(['repair', 'investment', 'other'], { message: 'Selectați o opțiune.' }),
     description: z.string().trim().min(1, 'Acest câmp este obligatoriu.').min(3, 'Titlul este obligatoriu.'),
     cost: z.coerce.number().min(0, 'Costul nu poate fi negativ.'),
     datePerformed: z.string().min(1, 'Acest câmp este obligatoriu.'),

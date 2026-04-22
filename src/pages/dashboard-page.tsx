@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import { BellRing, CarFront, HandCoins, Wrench } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import { PageHeader } from '@/components/shared'
+import { FleetOwnerBadge, PageHeader } from '@/components/shared'
+import { useFleetFilter } from '@/components/fleet-filter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,33 +17,50 @@ import {
   getStatusBadgeVariant,
   getStatusLabel,
 } from '@/lib/format'
+import { getSharedFleetLabel } from '@/lib/fleet-access'
 import { useAppStore } from '@/store/app-store'
 
 export function DashboardPage() {
-  const { cars, documents, rentals, maintenance } = useAppStore()
-  const income = rentals
+  const { cars, documents, rentals, maintenance, profile, incomingInvites } = useAppStore()
+  const { matchesOwner } = useFleetFilter()
+  const carsById = useMemo(() => new Map(cars.map((car) => [car.id, car])), [cars])
+  const filteredCars = useMemo(() => cars.filter((car) => matchesOwner(car.ownerId)), [cars, matchesOwner])
+  const filteredDocuments = useMemo(
+    () => documents.filter((document) => matchesOwner(carsById.get(document.carId)?.ownerId ?? '')),
+    [carsById, documents, matchesOwner],
+  )
+  const filteredRentals = useMemo(
+    () => rentals.filter((rental) => matchesOwner(carsById.get(rental.carId)?.ownerId ?? '')),
+    [carsById, matchesOwner, rentals],
+  )
+  const filteredMaintenance = useMemo(
+    () => maintenance.filter((item) => matchesOwner(carsById.get(item.carId)?.ownerId ?? '')),
+    [carsById, maintenance, matchesOwner],
+  )
+
+  const income = filteredRentals
     .filter((rental) => rental.status !== 'cancelled')
     .reduce((sum, rental) => sum + calculateRentalTotal(rental.segments), 0)
-  const expenses = maintenance.reduce((sum, item) => sum + item.cost, 0)
+  const expenses = filteredMaintenance.reduce((sum, item) => sum + item.cost, 0)
 
   const stats = [
-    { label: 'Total mașini', value: cars.length, icon: CarFront },
-    { label: 'Disponibile acum', value: cars.filter((item) => item.status === 'available').length, icon: BellRing },
-    { label: 'Închirieri active', value: rentals.filter((item) => item.status === 'active').length, icon: HandCoins },
-    { label: 'Intervenții', value: maintenance.length, icon: Wrench },
+    { label: 'Total masini', value: filteredCars.length, icon: CarFront },
+    { label: 'Disponibile acum', value: filteredCars.filter((item) => item.status === 'available').length, icon: BellRing },
+    { label: 'Inchirieri active', value: filteredRentals.filter((item) => item.status === 'active').length, icon: HandCoins },
+    { label: 'Interventii', value: filteredMaintenance.length, icon: Wrench },
   ]
 
   const sortedDocumentAlerts = useMemo(
     () =>
-      [...documents]
+      [...filteredDocuments]
         .filter((document) => getDocumentUrgency(document.expiryDate) !== 'ok')
         .sort((first, second) => compareDocumentsByExpiry(first.expiryDate, second.expiryDate))
         .slice(0, 4)
         .map((document) => ({
           document,
-          car: cars.find((carItem) => carItem.id === document.carId),
+          car: carsById.get(document.carId),
         })),
-    [cars, documents],
+    [carsById, filteredDocuments],
   )
 
   return (
@@ -51,7 +69,7 @@ export function DashboardPage() {
         title="Dashboard"
         action={
           <Link to="/masini/nou">
-            <Button>Adaugă mașină</Button>
+            <Button>Adauga masina</Button>
           </Link>
         }
       />
@@ -92,18 +110,19 @@ export function DashboardPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {sortedDocumentAlerts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nu există documente de afișat momentan.</p>
+            <p className="text-sm text-muted-foreground">Nu exista documente de afisat momentan.</p>
           ) : (
             sortedDocumentAlerts.map(({ document, car }) => (
               <div key={document.id} className="rounded-2xl border bg-card p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold">{document.customName ?? document.type}</p>
                     <p className="text-sm text-muted-foreground">
-                      {car?.licensePlate ?? 'Mașină necunoscută'}
+                      {car?.licensePlate ?? 'Masina necunoscuta'}
                       {' • '}
-                      {document.expiryDate ? `Expiră la ${formatDate(document.expiryDate)}` : 'Fără dată de expirare setată'}
+                      {document.expiryDate ? `Expira la ${formatDate(document.expiryDate)}` : 'Fara data de expirare setata'}
                     </p>
+                    <FleetOwnerBadge label={car ? getSharedFleetLabel(profile, incomingInvites, car.ownerId) : undefined} className="mt-2" />
                   </div>
                   <Badge variant={document.expiryDate ? 'warning' : 'muted'}>{getDocumentUrgencyLabel(document.expiryDate)}</Badge>
                 </div>
@@ -115,17 +134,18 @@ export function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Mașini disponibile</CardTitle>
+          <CardTitle>Masini disponibile</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-3">
-          {cars.filter((item) => item.status === 'available').map((car) => (
+          {filteredCars.filter((item) => item.status === 'available').map((car) => (
             <Link key={car.id} to={`/masini/${car.id}`} className="rounded-3xl border bg-card p-5 transition hover:-translate-y-0.5">
               <div className="flex items-center justify-between gap-3">
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="font-display text-xl font-bold">
                     {car.brand} {car.model}
                   </p>
                   <p className="text-sm text-muted-foreground">{car.licensePlate}</p>
+                  <FleetOwnerBadge label={getSharedFleetLabel(profile, incomingInvites, car.ownerId)} className="mt-2" />
                 </div>
                 <Badge variant={getStatusBadgeVariant(car.status)}>{getStatusLabel(car.status)}</Badge>
               </div>

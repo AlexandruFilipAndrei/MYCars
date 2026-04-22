@@ -1,8 +1,10 @@
 import { Search } from 'lucide-react'
 
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
 export function PageHeader({
   title,
@@ -71,5 +73,17 @@ export function SearchInput({
       <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input className="pl-10" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </div>
+  )
+}
+
+export function FleetOwnerBadge({ label, className }: { label?: string; className?: string }) {
+  if (!label) {
+    return null
+  }
+
+  return (
+    <Badge variant="muted" className={cn('w-fit', className)}>
+      {label}
+    </Badge>
   )
 }

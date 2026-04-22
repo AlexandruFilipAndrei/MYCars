@@ -125,7 +125,7 @@ type RemoteSegmentRow = {
 type RemoteMaintenanceRow = {
   id: string
   car_id: string
-  type: Maintenance['type']
+  type: Maintenance['type'] | 'service'
   description: string
   cost: number
   date_performed: string
@@ -1417,7 +1417,7 @@ function mapMaintenance(row: RemoteMaintenanceRow): Maintenance {
   return {
     id: row.id,
     carId: row.car_id,
-    type: row.type,
+    type: row.type === 'service' ? 'repair' : row.type,
     description: row.description,
     cost: row.cost,
     datePerformed: row.date_performed,

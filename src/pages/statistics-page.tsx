@@ -1,12 +1,24 @@
+import { useMemo } from 'react'
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { format as formatDate, subMonths } from 'date-fns'
 
+import { useFleetFilter } from '@/components/fleet-filter'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { calculateRentalTotal, formatCurrency } from '@/lib/format'
 import { useAppStore } from '@/store/app-store'
 
 export function StatisticsPage() {
-  const { rentals, maintenance } = useAppStore()
+  const { cars, rentals, maintenance } = useAppStore()
+  const { matchesOwner } = useFleetFilter()
+  const carsById = useMemo(() => new Map(cars.map((car) => [car.id, car])), [cars])
+  const filteredRentals = useMemo(
+    () => rentals.filter((item) => matchesOwner(carsById.get(item.carId)?.ownerId ?? '')),
+    [carsById, matchesOwner, rentals],
+  )
+  const filteredMaintenance = useMemo(
+    () => maintenance.filter((item) => matchesOwner(carsById.get(item.carId)?.ownerId ?? '')),
+    [carsById, maintenance, matchesOwner],
+  )
   const tooltipFormatter = (value: unknown) => {
     const normalized = Array.isArray(value) ? Number(value[0] ?? 0) : Number(value ?? 0)
     return formatCurrency(normalized)
@@ -17,11 +29,11 @@ export function StatisticsPage() {
     const key = formatDate(date, 'yyyy-MM')
     const month = formatDate(date, 'MMM')
 
-    const venituri = rentals
+    const venituri = filteredRentals
       .filter((item) => item.status !== 'cancelled' && item.startDate.slice(0, 7) === key)
       .reduce((sum, item) => sum + calculateRentalTotal(item.segments), 0)
 
-    const cheltuieli = maintenance
+    const cheltuieli = filteredMaintenance
       .filter((item) => item.datePerformed.slice(0, 7) === key)
       .reduce((sum, item) => sum + item.cost, 0)
 
@@ -37,7 +49,6 @@ export function StatisticsPage() {
 
   return (
     <div className="space-y-6">
-
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -60,7 +71,7 @@ export function StatisticsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Evoluție profit</CardTitle>
+            <CardTitle>Evolutie profit</CardTitle>
           </CardHeader>
           <CardContent className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -78,9 +89,9 @@ export function StatisticsPage() {
 
       <Card>
         <CardContent className="grid gap-4 p-6 md:grid-cols-3">
-          <Summary label="Venit lună curentă" value={formatCurrency(currentMonth.venituri)} />
-          <Summary label="Cheltuieli lună curentă" value={formatCurrency(currentMonth.cheltuieli)} />
-          <Summary label="Profit lună curentă" value={formatCurrency(currentMonth.profit)} />
+          <Summary label="Venit luna curenta" value={formatCurrency(currentMonth.venituri)} />
+          <Summary label="Cheltuieli luna curenta" value={formatCurrency(currentMonth.cheltuieli)} />
+          <Summary label="Profit luna curenta" value={formatCurrency(currentMonth.profit)} />
         </CardContent>
       </Card>
     </div>

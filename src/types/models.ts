@@ -12,7 +12,7 @@ export type DocumentType = 'ITP' | 'RCA' | 'CASCO' | 'ROVINIETA' | 'TALON' | 'CI
 export type ReminderType = 'date' | 'km'
 export type RentalStatus = 'active' | 'completed' | 'cancelled'
 export type PriceUnit = 'day' | 'week' | 'month'
-export type MaintenanceType = 'repair' | 'investment' | 'service' | 'other'
+export type MaintenanceType = 'repair' | 'investment' | 'other'
 export type FleetRole = 'viewer' | 'editor'
 export type NotificationType = 'expiry_30' | 'expiry_14' | 'expiry_7' | 'expired'
 
