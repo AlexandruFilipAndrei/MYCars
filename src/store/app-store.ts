@@ -16,6 +16,7 @@ type PersistedAppData = {
 }
 
 const appCacheVersion = 1
+const appCacheMaxAgeMs = 1000 * 60 * 60 * 4
 
 function createEmptyState(isLoading: boolean) {
   return {
@@ -35,6 +36,14 @@ function createEmptyState(isLoading: boolean) {
 
 function getAppCacheKey(userId: string) {
   return `mycars-app-cache-${userId}`
+}
+
+function clearPersistedAppData(userId: string) {
+  try {
+    localStorage.removeItem(getAppCacheKey(userId))
+  } catch {
+    // Ignore cache cleanup failures.
+  }
 }
 
 function pickPersistedAppData(source: PersistedAppData): PersistedAppData {
@@ -59,14 +68,23 @@ function readPersistedAppData(userId: string) {
       return null
     }
 
-    const parsed = JSON.parse(rawValue) as { version?: number; state?: PersistedAppData } | null
+    const parsed = JSON.parse(rawValue) as { version?: number; savedAt?: string; state?: PersistedAppData } | null
 
     if (!parsed || parsed.version !== appCacheVersion || !parsed.state) {
+      clearPersistedAppData(userId)
+      return null
+    }
+
+    const savedAt = parsed.savedAt ? new Date(parsed.savedAt).getTime() : Number.NaN
+
+    if (!Number.isFinite(savedAt) || Date.now() - savedAt > appCacheMaxAgeMs) {
+      clearPersistedAppData(userId)
       return null
     }
 
     return pickPersistedAppData(parsed.state)
   } catch {
+    clearPersistedAppData(userId)
     return null
   }
 }

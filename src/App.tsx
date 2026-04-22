@@ -45,12 +45,14 @@ function preloadSecondaryRoutes() {
 
 function AppBootScreen() {
   return (
-    <div className="page-shell" aria-hidden="true">
+    <div className="page-shell">
       <aside className="glass-panel hidden w-72 shrink-0 p-4 md:block" />
       <div className="flex min-h-screen min-w-0 flex-1 flex-col gap-4 md:pl-0">
         <div className="glass-panel sticky top-3 h-[74px] shrink-0" />
         <div className="flex flex-1 items-center justify-center">
-          <div className="glass-panel px-5 py-3 text-sm font-medium text-muted-foreground">Se incarca datele...</div>
+          <div role="status" aria-live="polite" className="glass-panel px-5 py-3 text-sm font-medium text-muted-foreground">
+            Se incarca datele...
+          </div>
         </div>
       </div>
     </div>
