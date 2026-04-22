@@ -3,17 +3,45 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { useAuthStore } from '@/store/auth-store'
 
-const AppShell = lazy(() => import('@/components/app-shell').then((module) => ({ default: module.AppShell })))
-const AuthPage = lazy(() => import('@/pages/auth-page').then((module) => ({ default: module.AuthPage })))
-const CarDetailsPage = lazy(() => import('@/pages/car-details-page').then((module) => ({ default: module.CarDetailsPage })))
-const CarFormPage = lazy(() => import('@/pages/car-form-page').then((module) => ({ default: module.CarFormPage })))
-const CarsPage = lazy(() => import('@/pages/cars-page').then((module) => ({ default: module.CarsPage })))
-const DashboardPage = lazy(() => import('@/pages/dashboard-page').then((module) => ({ default: module.DashboardPage })))
-const MaintenancePage = lazy(() => import('@/pages/maintenance-page').then((module) => ({ default: module.MaintenancePage })))
-const NotificationsPage = lazy(() => import('@/pages/notifications-page').then((module) => ({ default: module.NotificationsPage })))
-const RentalsPage = lazy(() => import('@/pages/rentals-page').then((module) => ({ default: module.RentalsPage })))
-const SettingsPage = lazy(() => import('@/pages/settings-page').then((module) => ({ default: module.SettingsPage })))
-const StatisticsPage = lazy(() => import('@/pages/statistics-page').then((module) => ({ default: module.StatisticsPage })))
+const loadAppShell = () => import('@/components/app-shell')
+const loadAuthPage = () => import('@/pages/auth-page')
+const loadCarDetailsPage = () => import('@/pages/car-details-page')
+const loadCarFormPage = () => import('@/pages/car-form-page')
+const loadCarsPage = () => import('@/pages/cars-page')
+const loadDashboardPage = () => import('@/pages/dashboard-page')
+const loadMaintenancePage = () => import('@/pages/maintenance-page')
+const loadNotificationsPage = () => import('@/pages/notifications-page')
+const loadRentalsPage = () => import('@/pages/rentals-page')
+const loadSettingsPage = () => import('@/pages/settings-page')
+const loadStatisticsPage = () => import('@/pages/statistics-page')
+
+const AppShell = lazy(() => loadAppShell().then((module) => ({ default: module.AppShell })))
+const AuthPage = lazy(() => loadAuthPage().then((module) => ({ default: module.AuthPage })))
+const CarDetailsPage = lazy(() => loadCarDetailsPage().then((module) => ({ default: module.CarDetailsPage })))
+const CarFormPage = lazy(() => loadCarFormPage().then((module) => ({ default: module.CarFormPage })))
+const CarsPage = lazy(() => loadCarsPage().then((module) => ({ default: module.CarsPage })))
+const DashboardPage = lazy(() => loadDashboardPage().then((module) => ({ default: module.DashboardPage })))
+const MaintenancePage = lazy(() => loadMaintenancePage().then((module) => ({ default: module.MaintenancePage })))
+const NotificationsPage = lazy(() => loadNotificationsPage().then((module) => ({ default: module.NotificationsPage })))
+const RentalsPage = lazy(() => loadRentalsPage().then((module) => ({ default: module.RentalsPage })))
+const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsPage })))
+const StatisticsPage = lazy(() => loadStatisticsPage().then((module) => ({ default: module.StatisticsPage })))
+
+function preloadPrimaryRoutes() {
+  void loadAppShell()
+  void loadDashboardPage()
+  void loadCarsPage()
+  void loadRentalsPage()
+  void loadMaintenancePage()
+  void loadNotificationsPage()
+  void loadSettingsPage()
+  void loadCarFormPage()
+}
+
+function preloadSecondaryRoutes() {
+  void loadCarDetailsPage()
+  void loadStatisticsPage()
+}
 
 function AppBootScreen() {
   return (
@@ -21,7 +49,9 @@ function AppBootScreen() {
       <aside className="glass-panel hidden w-72 shrink-0 p-4 md:block" />
       <div className="flex min-h-screen min-w-0 flex-1 flex-col gap-4 md:pl-0">
         <div className="glass-panel sticky top-3 h-[74px] shrink-0" />
-        <div className="flex-1" />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="glass-panel px-5 py-3 text-sm font-medium text-muted-foreground">Se incarca datele...</div>
+        </div>
       </div>
     </div>
   )
@@ -42,11 +72,29 @@ function ProtectedRoute() {
 }
 
 export default function App() {
-  const { initialize } = useAuthStore()
+  const { initialize, user } = useAuthStore()
 
   useEffect(() => {
     void initialize()
   }, [initialize])
+
+  useEffect(() => {
+    if (!user) {
+      return
+    }
+
+    const primaryTimer = window.setTimeout(() => {
+      preloadPrimaryRoutes()
+    }, 0)
+    const secondaryTimer = window.setTimeout(() => {
+      preloadSecondaryRoutes()
+    }, 1200)
+
+    return () => {
+      window.clearTimeout(primaryTimer)
+      window.clearTimeout(secondaryTimer)
+    }
+  }, [user])
 
   return (
     <BrowserRouter>
