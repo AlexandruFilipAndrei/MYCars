@@ -117,6 +117,7 @@ export function RentalsPage() {
   const selectedEndDate = form.watch('endDate')
   const selectedStatus = form.watch('status')
   const currentSegments = (form.watch('segments') as SegmentDraft[] | undefined) ?? []
+  const hasSelectedRentalPeriod = Boolean(selectedStartDate && selectedEndDate)
 
   useEffect(() => {
     if (editingRental || editableCars.length === 0) return
@@ -504,6 +505,11 @@ export function RentalsPage() {
               <p className="mb-4 mt-1 text-sm text-muted-foreground">
                 Datele segmentului pornesc automat din perioada inchirierii. Daca nu adaugi niciun segment, primul completat aici va fi salvat automat.
               </p>
+              {!hasSelectedRentalPeriod ? (
+                <div className="mb-4 rounded-2xl bg-muted p-3 text-sm text-muted-foreground">
+                  Seteaza mai sus data de inceput si data de sfarsit pentru inchiriere, iar segmentul le va prelua automat aici.
+                </div>
+              ) : null}
               <div className="grid min-w-0 items-end gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,220px)_minmax(0,1fr)_minmax(0,1fr)]">
                 <Field label="Pret" required>
                   <Input
@@ -524,24 +530,28 @@ export function RentalsPage() {
                     <option value="month">Pe luna</option>
                   </select>
                 </Field>
-                <Field label="De la" required>
-                  <Input
-                    className="min-w-0 max-w-full"
-                    type="date"
-                    value={segment.startDate}
-                    onChange={(event) => setSegment((current) => ({ ...current, startDate: event.target.value }))}
-                  />
-                </Field>
-                <Field label="Pana la" required>
-                  <Input
-                    className="min-w-0 max-w-full"
-                    type="date"
-                    value={segment.endDate}
-                    onChange={(event) => setSegment((current) => ({ ...current, endDate: event.target.value }))}
-                  />
-                </Field>
+                {hasSelectedRentalPeriod ? (
+                  <>
+                    <Field label="De la" required>
+                      <Input
+                        className="min-w-0 max-w-full"
+                        type="date"
+                        value={segment.startDate}
+                        onChange={(event) => setSegment((current) => ({ ...current, startDate: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Pana la" required>
+                      <Input
+                        className="min-w-0 max-w-full"
+                        type="date"
+                        value={segment.endDate}
+                        onChange={(event) => setSegment((current) => ({ ...current, endDate: event.target.value }))}
+                      />
+                    </Field>
+                  </>
+                ) : null}
               </div>
-              <Button className="mt-3" type="button" variant="outline" onClick={addSegment}>
+              <Button className="mt-3" type="button" variant="outline" onClick={addSegment} disabled={!hasSelectedRentalPeriod}>
                 Adauga segment
               </Button>
 
