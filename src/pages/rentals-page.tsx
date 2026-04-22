@@ -405,7 +405,7 @@ export function RentalsPage() {
           if (!next) resetDialog()
         }}
       >
-        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-4xl">
+        <DialogContent className="max-h-[90vh] w-[calc(100vw-1.25rem)] max-w-[calc(100vw-1.25rem)] overflow-x-hidden overflow-y-auto p-4 sm:max-w-4xl sm:p-6">
           <DialogHeader>
             <DialogTitle>{editingRental ? 'Editeaza inchirierea' : 'Inchiriere noua'}</DialogTitle>
             <DialogDescription>Selecteaza o masina, apoi alege perioada si segmentele de pret.</DialogDescription>
@@ -499,7 +499,7 @@ export function RentalsPage() {
               <Textarea {...form.register('notes')} />
             </Field>
 
-            <div className="rounded-3xl border p-4">
+            <div className="min-w-0 overflow-hidden rounded-3xl border p-4">
               <p className="font-semibold">Segmente tarif</p>
               <p className="mb-4 mt-1 text-sm text-muted-foreground">
                 Datele segmentului pornesc automat din perioada inchirierii. Daca nu adaugi niciun segment, primul completat aici va fi salvat automat.
@@ -507,6 +507,7 @@ export function RentalsPage() {
               <div className="grid min-w-0 items-end gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,220px)_minmax(0,1fr)_minmax(0,1fr)]">
                 <Field label="Pret" required>
                   <Input
+                    className="min-w-0 max-w-full"
                     type="number"
                     value={segment.pricePerUnit}
                     onChange={(event) => setSegment((current) => ({ ...current, pricePerUnit: Number(event.target.value) }))}
@@ -524,10 +525,20 @@ export function RentalsPage() {
                   </select>
                 </Field>
                 <Field label="De la" required>
-                  <Input type="date" value={segment.startDate} onChange={(event) => setSegment((current) => ({ ...current, startDate: event.target.value }))} />
+                  <Input
+                    className="min-w-0 max-w-full"
+                    type="date"
+                    value={segment.startDate}
+                    onChange={(event) => setSegment((current) => ({ ...current, startDate: event.target.value }))}
+                  />
                 </Field>
                 <Field label="Pana la" required>
-                  <Input type="date" value={segment.endDate} onChange={(event) => setSegment((current) => ({ ...current, endDate: event.target.value }))} />
+                  <Input
+                    className="min-w-0 max-w-full"
+                    type="date"
+                    value={segment.endDate}
+                    onChange={(event) => setSegment((current) => ({ ...current, endDate: event.target.value }))}
+                  />
                 </Field>
               </div>
               <Button className="mt-3" type="button" variant="outline" onClick={addSegment}>
