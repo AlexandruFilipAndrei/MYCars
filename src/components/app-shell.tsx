@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bell, CarFront, ChartColumn, Gauge, Menu, Settings, ShieldAlert, Wrench } from 'lucide-react'
+import { Bell, CarFront, ChartColumn, FileText, Gauge, Menu, Settings, ShieldAlert, Wrench } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 
@@ -16,6 +16,7 @@ const navigation = [
   { to: '/inchirieri', label: 'Inchirieri', icon: ShieldAlert },
   { to: '/reparatii', label: 'Reparatii', icon: Wrench },
   { to: '/statistici', label: 'Statistici', icon: ChartColumn },
+  { to: '/raport-flota', label: 'Raport flota', icon: FileText },
   { to: '/notificari', label: 'Notificari', icon: Bell },
   { to: '/setari', label: 'Setari', icon: Settings },
 ]
@@ -48,7 +49,7 @@ export function AppShell() {
   }, [bootstrap, userEmail, userFullName, userId])
 
   const unreadCount = useMemo(() => notifications.filter((item) => !item.isRead).length, [notifications])
-  const shouldShowFleetFilter = ['/', '/masini', '/inchirieri', '/reparatii', '/statistici', '/notificari'].includes(location.pathname)
+  const shouldShowFleetFilter = ['/', '/masini', '/inchirieri', '/reparatii', '/statistici', '/raport-flota', '/notificari'].includes(location.pathname)
   const hasBootstrappedContent =
     Boolean(profile) ||
     cars.length > 0 ||

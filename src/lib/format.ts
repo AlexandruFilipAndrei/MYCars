@@ -3,6 +3,10 @@ import { differenceInCalendarDays, format, isValid, parseISO } from 'date-fns'
 import type { BadgeProps } from '@/components/ui/badge'
 import type { CarStatus, CurrencyCode, NotificationType, PriceUnit, RentalPriceSegment } from '@/types/models'
 
+function getPriceUnitDivisor(unit: PriceUnit) {
+  return unit === 'day' ? 1 : unit === 'week' ? 7 : 30
+}
+
 export function formatCurrency(value: number, currency: CurrencyCode = 'RON') {
   try {
     return new Intl.NumberFormat('ro-RO', {
@@ -113,8 +117,17 @@ export function calculateSegmentTotal(segment: RentalPriceSegment) {
   const start = parseISO(segment.startDate)
   const end = parseISO(segment.endDate)
   const days = Math.max(differenceInCalendarDays(end, start) + 1, 1)
-  const divisor = segment.priceUnit === 'day' ? 1 : segment.priceUnit === 'week' ? 7 : 30
+  const divisor = getPriceUnitDivisor(segment.priceUnit)
   return Math.ceil(days / divisor) * segment.pricePerUnit
+}
+
+export function calculateSegmentAccruedRevenue(segment: RentalPriceSegment, accruedDays?: number) {
+  const start = parseISO(segment.startDate)
+  const end = parseISO(segment.endDate)
+  const totalDays = Math.max(differenceInCalendarDays(end, start) + 1, 1)
+  const effectiveDays = Math.min(Math.max(accruedDays ?? totalDays, 0), totalDays)
+
+  return (effectiveDays / getPriceUnitDivisor(segment.priceUnit)) * segment.pricePerUnit
 }
 
 export function calculateRentalTotal(segments: RentalPriceSegment[]) {

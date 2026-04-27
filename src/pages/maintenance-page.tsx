@@ -31,10 +31,10 @@ function createDefaultMaintenanceValues(carId = ''): MaintenanceValues {
     description: '',
     cost: 0,
     datePerformed: '',
-    expectedCompletionDate: '',
+    serviceEndDate: '',
     kmAtService: undefined,
     notes: '',
-    markCarAsMaintenance: false,
+    blocksAvailability: false,
   }
 }
 
@@ -73,19 +73,18 @@ export function MaintenancePage() {
   })
 
   const selectedCarId = form.watch('carId')
-  const markCarAsMaintenance = form.watch('markCarAsMaintenance')
+  const selectedServiceStartDate = form.watch('datePerformed')
   const selectedCar = useMemo(() => cars.find((car) => car.id === selectedCarId), [cars, selectedCarId])
   const selectedCarHasActiveRental = useMemo(
     () => rentals.some((rental) => rental.carId === selectedCarId && rental.status === 'active'),
     [rentals, selectedCarId],
   )
-  const showExpectedCompletionField = Boolean(editingId || markCarAsMaintenance || selectedCar?.status === 'maintenance')
 
   useEffect(() => {
-    if ((selectedCar?.status === 'archived' || selectedCarHasActiveRental) && form.getValues('markCarAsMaintenance')) {
-      form.setValue('markCarAsMaintenance', false)
+    if (selectedServiceStartDate && !form.getValues('serviceEndDate')) {
+      form.setValue('serviceEndDate', selectedServiceStartDate, { shouldValidate: true })
     }
-  }, [form, selectedCar?.status, selectedCarHasActiveRental])
+  }, [form, selectedServiceStartDate])
 
   const resetForm = (preferredCarId?: string) => {
     const nextCarId =
@@ -175,7 +174,8 @@ export function MaintenancePage() {
                   </div>
 
                   <p className="text-sm text-muted-foreground">Data: {formatDate(item.datePerformed)}</p>
-                  {item.expectedCompletionDate ? <p className="text-sm text-muted-foreground">Disponibila estimat la: {formatDate(item.expectedCompletionDate)}</p> : null}
+                  <p className="text-sm text-muted-foreground">Iese din service: {formatDate(item.serviceEndDate)}</p>
+                  {item.blocksAvailability ? <p className="text-sm text-amber-700 dark:text-amber-300">Scoate masina din circuit pe durata interventiei.</p> : null}
                   <p className="text-sm text-muted-foreground">Tip: {getMaintenanceTypeLabel(item.type)}</p>
 
                   {item.notes ? <p className="break-words rounded-2xl bg-muted p-3 text-sm">{item.notes}</p> : null}
@@ -202,10 +202,10 @@ export function MaintenancePage() {
                             description: item.description,
                             cost: item.cost,
                             datePerformed: item.datePerformed,
-                            expectedCompletionDate: item.expectedCompletionDate ?? '',
+                            serviceEndDate: item.serviceEndDate,
                             kmAtService: item.kmAtService,
                             notes: item.notes ?? '',
-                            markCarAsMaintenance: false,
+                            blocksAvailability: item.blocksAvailability,
                           })
                           setDocumentFiles([])
                           setOpen(true)
@@ -288,11 +288,9 @@ export function MaintenancePage() {
               <Input className={fieldClass(Boolean(form.formState.errors.datePerformed))} type="date" {...form.register('datePerformed')} />
             </Field>
 
-            {showExpectedCompletionField ? (
-              <Field label="Disponibila estimat la" error={form.formState.errors.expectedCompletionDate?.message}>
-                <Input className={fieldClass(Boolean(form.formState.errors.expectedCompletionDate))} type="date" {...form.register('expectedCompletionDate')} />
-              </Field>
-            ) : null}
+            <Field label="Data iesire service" required error={form.formState.errors.serviceEndDate?.message}>
+              <Input className={fieldClass(Boolean(form.formState.errors.serviceEndDate))} type="date" {...form.register('serviceEndDate')} />
+            </Field>
 
             <Field label="Kilometraj">
               <Input type="number" {...form.register('kmAtService')} />
@@ -303,15 +301,15 @@ export function MaintenancePage() {
             </Field>
 
             <label className="flex items-center gap-2 text-sm font-medium">
-              <input type="checkbox" disabled={selectedCar?.status === 'archived' || selectedCarHasActiveRental} {...form.register('markCarAsMaintenance')} />
-              Marcheaza masina ca fiind in service
+              <input type="checkbox" disabled={selectedCar?.status === 'archived'} {...form.register('blocksAvailability')} />
+              Scoate masina din circuit in aceasta perioada
             </label>
 
-            {selectedCar?.status === 'archived' ? <p className="text-sm text-muted-foreground">O masina arhivata nu poate fi trecuta in service.</p> : null}
+            {selectedCar?.status === 'archived' ? <p className="text-sm text-muted-foreground">O masina arhivata nu poate fi scoasa din circuit printr-o interventie noua.</p> : null}
 
-            {selectedCarHasActiveRental ? <p className="text-sm text-muted-foreground">Masina nu poate fi trecuta in service cat timp are o inchiriere activa.</p> : null}
+            {selectedCarHasActiveRental ? <p className="text-sm text-muted-foreground">Daca intervalul de service se suprapune cu o inchiriere, salvarea va fi blocata.</p> : null}
 
-            {showExpectedCompletionField ? <p className="text-sm text-muted-foreground">Completeaza doar daca stii aproximativ cand iese masina din service.</p> : null}
+            <p className="text-sm text-muted-foreground">Data de iesire se completeaza automat cu ziua interventiei si o poti ajusta daca masina sta mai mult in service.</p>
 
             <FileDropzone
               label="Incarca facturi, poze sau PDF-uri"

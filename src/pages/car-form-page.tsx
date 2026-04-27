@@ -81,7 +81,7 @@ export function CarFormPage() {
   )
 
   const canEditCurrentCar = currentCar ? canEditCar(profile, incomingInvites, currentCar) : true
-  const defaultValues = useMemo(
+  const defaultValues = useMemo<CarValues>(
     () => ({
       ownerId: currentCar?.ownerId ?? editableFleets[0]?.ownerId ?? profile?.id ?? '',
       licensePlate: currentCar?.licensePlate ?? '',
@@ -93,12 +93,12 @@ export function CarFormPage() {
       engineDisplacement: currentCar?.engineDisplacement ?? 1600,
       transmission: currentCar?.transmission ?? 'manual',
       chassisNumber: currentCar?.chassisNumber ?? '',
-      status: currentCar?.status ?? 'available',
+      status: currentCar?.status === 'archived' ? 'archived' : 'available',
       purchasePrice: currentCar?.purchasePrice,
       purchaseCurrency: currentCar?.purchaseCurrency ?? 'RON',
+      annualInsuranceCost: currentCar?.annualInsuranceCost ?? 0,
       currentKm: currentCar?.currentKm ?? 0,
       notes: currentCar?.notes ?? '',
-      serviceReturnDate: currentCar?.serviceReturnDate ?? '',
       itpExpiryDate: currentItp?.expiryDate ?? '',
       rcaExpiryDate: currentRca?.expiryDate ?? '',
     }),
@@ -109,7 +109,6 @@ export function CarFormPage() {
     resolver: zodResolver(carSchema),
     defaultValues,
   })
-  const selectedStatus = form.watch('status')
 
   useEffect(() => {
     form.reset(defaultValues)
@@ -119,16 +118,6 @@ export function CarFormPage() {
     setAdditionalDocuments(defaultAdditionalDocuments)
     setDocumentError(null)
   }, [defaultAdditionalDocuments, defaultValues, form])
-
-  useEffect(() => {
-    if (selectedStatus !== 'maintenance' && form.getValues('serviceReturnDate')) {
-      form.setValue('serviceReturnDate', '', {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      })
-    }
-  }, [form, selectedStatus])
 
   useEffect(() => {
     if (!location.hash) {
@@ -289,31 +278,20 @@ export function CarFormPage() {
             </Field>
             <Field label="Status" required>
               <select className={selectClass(false)} {...form.register('status')}>
-                <option value="available" disabled={currentCarHasActiveRental}>
+                <option value="available">
                   Disponibila
                 </option>
-                <option value="rented" disabled={!currentCarHasActiveRental}>
-                  Inchiriata
-                </option>
-                <option value="maintenance">Service</option>
                 <option value="archived">Arhivata</option>
               </select>
             </Field>
-            {selectedStatus === 'maintenance' ? (
-              <Field label="Disponibila estimat la" error={form.formState.errors.serviceReturnDate?.message}>
-                <Input
-                  className={inputClass(Boolean(form.formState.errors.serviceReturnDate))}
-                  type="date"
-                  {...form.register('serviceReturnDate')}
-                />
-              </Field>
-            ) : null}
             {currentCar ? (
               <div className="md:col-span-2">
                 <p className="text-sm text-muted-foreground">
-                  {currentCarHasActiveRental
-                    ? 'Masina are o inchiriere activa, deci statusul trebuie sa ramana Inchiriata.'
-                    : 'Statusul Inchiriata este disponibil doar cand exista o inchiriere activa pentru masina.'}
+                  {currentCar.status === 'maintenance'
+                    ? 'Statusul Service este calculat automat din intervalele de interventie care scot masina din circuit.'
+                    : currentCarHasActiveRental
+                      ? 'Statusul Inchiriata este calculat automat din intervalele de inchiriere active.'
+                      : 'Statusurile operationale Inchiriata si Service sunt calculate automat de aplicatie.'}
                 </p>
               </div>
             ) : null}
@@ -327,6 +305,13 @@ export function CarFormPage() {
                 <option value="USD">USD</option>
                 <option value="GBP">GBP</option>
               </select>
+            </Field>
+            <Field label="Cost asigurare / an" required error={form.formState.errors.annualInsuranceCost?.message}>
+              <Input
+                className={inputClass(Boolean(form.formState.errors.annualInsuranceCost))}
+                type="number"
+                {...form.register('annualInsuranceCost')}
+              />
             </Field>
             <Field label="Kilometraj curent" required error={form.formState.errors.currentKm?.message}>
               <Input className={inputClass(Boolean(form.formState.errors.currentKm))} type="number" {...form.register('currentKm')} />

@@ -2,6 +2,7 @@ import type {
   Car,
   CarDocument,
   FleetAccess,
+  FleetReportRecord,
   Maintenance,
   NotificationItem,
   Profile,
@@ -43,6 +44,7 @@ export const demoCars: Car[] = [
     status: 'available',
     purchasePrice: 18200,
     purchaseCurrency: 'EUR',
+    annualInsuranceCost: 1850,
     notes: 'Masina ideala pentru inchiriere pe termen mediu.',
     serviceReturnDate: undefined,
     currentKm: 84750,
@@ -66,6 +68,7 @@ export const demoCars: Car[] = [
     status: 'rented',
     purchasePrice: 16900,
     purchaseCurrency: 'EUR',
+    annualInsuranceCost: 2100,
     notes: 'Masina activa pe platforma, cu client recurent.',
     serviceReturnDate: undefined,
     currentKm: 124320,
@@ -89,6 +92,7 @@ export const demoCars: Car[] = [
     status: 'maintenance',
     purchasePrice: 15400,
     purchaseCurrency: 'EUR',
+    annualInsuranceCost: 1950,
     notes: 'Programata pentru revizie completa si schimb consumabile.',
     serviceReturnDate: dateOffset(1),
     currentKm: 167000,
@@ -218,7 +222,8 @@ export const demoMaintenance: Maintenance[] = [
     description: 'Revizie completa + schimb ulei',
     cost: 1450,
     datePerformed: dateOffset(-1),
-    expectedCompletionDate: dateOffset(1),
+    serviceEndDate: dateOffset(1),
+    blocksAvailability: true,
     kmAtService: 166500,
     notes: 'Include filtre, diagnoza si verificare frane.',
     createdAt: nowIso,
@@ -260,3 +265,5 @@ export const demoNotifications: NotificationItem[] = [
     createdAt: nowIso,
   },
 ]
+
+export const demoFleetReports: FleetReportRecord[] = []

@@ -91,6 +91,7 @@
       font-size: 16px !important;
     }
   }
+
 }
 
 @layer components {
@@ -104,5 +105,62 @@
 
   .page-title {
     @apply font-display text-3xl font-bold tracking-tight md:text-4xl;
+  }
+}
+
+@media print {
+  body {
+    background: white !important;
+    background-image: none !important;
+  }
+
+  .page-shell {
+    display: block;
+    max-width: none;
+    padding: 0;
+  }
+
+  aside,
+  header,
+  .fleet-report-print-hidden {
+    display: none !important;
+  }
+
+  main {
+    display: block !important;
+    padding: 0 !important;
+  }
+
+  main > *:not(.fleet-report-page) {
+    display: none !important;
+  }
+
+  .fleet-report-page {
+    display: block !important;
+    padding: 0;
+  }
+
+  .fleet-report-page .rounded-2xl,
+  .fleet-report-page .rounded-3xl,
+  .fleet-report-page .glass-panel {
+    border-radius: 0.5rem !important;
+  }
+
+  .fleet-report-page .shadow-soft {
+    box-shadow: none !important;
+  }
+
+  .fleet-report-page .bg-muted {
+    background: transparent !important;
+  }
+
+  .fleet-report-page .grid {
+    break-inside: avoid;
+  }
+
+  .fleet-report-page .card,
+  .fleet-report-page .rounded-2xl,
+  .fleet-report-page .rounded-3xl {
+    break-inside: avoid;
   }
 }

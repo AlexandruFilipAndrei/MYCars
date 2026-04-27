@@ -16,6 +16,7 @@ Aplicația este disponibilă aici:
 - înregistrezi închirieri și urmărești statusul mașinilor
 - gestionezi reparații, mentenanță și documente asociate
 - vezi statistici relevante pentru flotă
+- generezi rapoarte economice de flotă cu concluzii AI
 - inviți alți utilizatori să aibă acces la flotă
 - testezi aplicația și în modul demo
 
@@ -47,6 +48,7 @@ npm install
 ```env
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your-public-anon-key
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
 4. Pornește serverul de dezvoltare:
@@ -72,6 +74,7 @@ Variabile necesare:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `GEMINI_API_KEY` pentru raportul Fleet AI
 
 Dacă aceste variabile nu sunt configurate, aplicația poate fi explorată în continuare folosind modul demo.
 
@@ -83,3 +86,4 @@ Proiectul este pregătit pentru deploy pe Vercel. Configurația existentă folos
 
 - Modul demo folosește date locale și nu salvează informațiile într-o bază de date reală.
 - Pentru producție, Supabase trebuie configurat atât pentru autentificare, cât și pentru storage.
+- Endpoint-ul AI rulează ca funcție Vercel și cere o sesiune Supabase validă; local, pentru testarea lui, folosește `vercel dev`.

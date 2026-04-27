@@ -11,6 +11,7 @@ const loadCarsPage = () => import('@/pages/cars-page')
 const loadDashboardPage = () => import('@/pages/dashboard-page')
 const loadMaintenancePage = () => import('@/pages/maintenance-page')
 const loadNotificationsPage = () => import('@/pages/notifications-page')
+const loadFleetReportPage = () => import('@/pages/fleet-report-page')
 const loadRentalsPage = () => import('@/pages/rentals-page')
 const loadSettingsPage = () => import('@/pages/settings-page')
 const loadStatisticsPage = () => import('@/pages/statistics-page')
@@ -23,6 +24,7 @@ const CarsPage = lazy(() => loadCarsPage().then((module) => ({ default: module.C
 const DashboardPage = lazy(() => loadDashboardPage().then((module) => ({ default: module.DashboardPage })))
 const MaintenancePage = lazy(() => loadMaintenancePage().then((module) => ({ default: module.MaintenancePage })))
 const NotificationsPage = lazy(() => loadNotificationsPage().then((module) => ({ default: module.NotificationsPage })))
+const FleetReportPage = lazy(() => loadFleetReportPage().then((module) => ({ default: module.FleetReportPage })))
 const RentalsPage = lazy(() => loadRentalsPage().then((module) => ({ default: module.RentalsPage })))
 const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsPage })))
 const StatisticsPage = lazy(() => loadStatisticsPage().then((module) => ({ default: module.StatisticsPage })))
@@ -34,6 +36,7 @@ function preloadPrimaryRoutes() {
   void loadRentalsPage()
   void loadMaintenancePage()
   void loadNotificationsPage()
+  void loadFleetReportPage()
   void loadSettingsPage()
   void loadCarFormPage()
 }
@@ -112,6 +115,7 @@ export default function App() {
             <Route path="/inchirieri" element={<RentalsPage />} />
             <Route path="/reparatii" element={<MaintenancePage />} />
             <Route path="/statistici" element={<StatisticsPage />} />
+            <Route path="/raport-flota" element={<FleetReportPage />} />
             <Route path="/notificari" element={<NotificationsPage />} />
             <Route path="/setari" element={<SettingsPage />} />
           </Route>

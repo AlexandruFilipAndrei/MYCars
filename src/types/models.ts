@@ -15,6 +15,9 @@ export type PriceUnit = 'day' | 'week' | 'month'
 export type MaintenanceType = 'repair' | 'investment' | 'other'
 export type FleetRole = 'viewer' | 'editor'
 export type NotificationType = 'expiry_30' | 'expiry_14' | 'expiry_7' | 'expired'
+export type FleetReportPeriodKind = '90d' | '180d' | '365d' | 'all'
+export type FleetReportVerdict = 'very_good' | 'good' | 'monitor' | 'replace_candidate'
+export type FleetReportAiAction = 'keep' | 'monitor' | 'replace_candidate'
 
 export interface Profile {
   id: string
@@ -73,6 +76,7 @@ export interface Car {
   status: CarStatus
   purchasePrice?: number
   purchaseCurrency: CurrencyCode
+  annualInsuranceCost: number
   notes?: string
   serviceReturnDate?: string
   currentKm: number
@@ -136,7 +140,8 @@ export interface Maintenance {
   description: string
   cost: number
   datePerformed: string
-  expectedCompletionDate?: string
+  serviceEndDate: string
+  blocksAvailability: boolean
   kmAtService?: number
   notes?: string
   createdAt: string
@@ -164,5 +169,92 @@ export interface NotificationItem {
   message: string
   type: NotificationType
   isRead: boolean
+  createdAt: string
+}
+
+export interface FleetReportCarCommentary {
+  carId: string
+  label: string
+  summary: string
+  action: FleetReportAiAction
+}
+
+export interface FleetReportAiSummary {
+  executiveSummary: string
+  highlights: string[]
+  risks: string[]
+  recommendations: string[]
+  carCommentaries: FleetReportCarCommentary[]
+  generatedAt: string
+}
+
+export interface FleetReportCarScore {
+  carId: string
+  ownerId: string
+  brand: string
+  model: string
+  licensePlate: string
+  label: string
+  status: CarStatus
+  totalDays: number
+  serviceDays: number
+  availableDays: number
+  rentedDays: number
+  idleDays: number
+  revenue: number
+  maintenanceCost: number
+  insuranceAllocated: number
+  totalCost: number
+  profit: number
+  profitMargin: number
+  utilization: number
+  availability: number
+  profitPerAvailableDay: number
+  score: number
+  verdict: FleetReportVerdict
+}
+
+export interface FleetReportTotals {
+  carCount: number
+  totalDays: number
+  totalServiceDays: number
+  totalAvailableDays: number
+  totalRentedDays: number
+  totalIdleDays: number
+  totalRevenue: number
+  totalMaintenanceCost: number
+  totalInsuranceCost: number
+  totalCost: number
+  totalProfit: number
+  utilization: number
+  availability: number
+  profitMargin: number
+  profitPerAvailableDay: number
+}
+
+export interface FleetReportSnapshot {
+  generatedAt: string
+  periodKind: FleetReportPeriodKind
+  periodStart: string
+  periodEnd: string
+  selectedOwnerIds: string[]
+  scoringVersion: string
+  overallScore: number
+  totals: FleetReportTotals
+  cars: FleetReportCarScore[]
+  aiSummary?: FleetReportAiSummary
+}
+
+export interface FleetReportRecord {
+  id: string
+  createdBy: string
+  periodKind: FleetReportPeriodKind
+  periodStart: string
+  periodEnd: string
+  selectedOwnerIds: string[]
+  scoringVersion: string
+  aiProvider?: string
+  aiModel?: string
+  report: FleetReportSnapshot
   createdAt: string
 }

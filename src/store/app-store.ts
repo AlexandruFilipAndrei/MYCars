@@ -1,7 +1,20 @@
 import { create } from 'zustand'
 
 import { dataService } from '@/lib/data-service'
-import type { Car, CarDocument, CarPhoto, DocumentType, FleetAccess, Maintenance, MaintenanceDocument, NotificationItem, Profile, Rental } from '@/types/models'
+import type {
+  Car,
+  CarDocument,
+  CarPhoto,
+  DocumentType,
+  FleetAccess,
+  FleetReportRecord,
+  FleetReportSnapshot,
+  Maintenance,
+  MaintenanceDocument,
+  NotificationItem,
+  Profile,
+  Rental,
+} from '@/types/models'
 
 type PersistedAppData = {
   profile: Profile | null
@@ -10,12 +23,13 @@ type PersistedAppData = {
   documents: CarDocument[]
   rentals: Rental[]
   maintenance: Maintenance[]
+  fleetReports: FleetReportRecord[]
   notifications: NotificationItem[]
   invites: FleetAccess[]
   incomingInvites: FleetAccess[]
 }
 
-const appCacheVersion = 1
+const appCacheVersion = 2
 const appCacheMaxAgeMs = 1000 * 60 * 60 * 4
 
 function createEmptyState(isLoading: boolean) {
@@ -27,6 +41,7 @@ function createEmptyState(isLoading: boolean) {
     documents: [] as CarDocument[],
     rentals: [] as Rental[],
     maintenance: [] as Maintenance[],
+    fleetReports: [] as FleetReportRecord[],
     notifications: [] as NotificationItem[],
     invites: [] as FleetAccess[],
     incomingInvites: [] as FleetAccess[],
@@ -54,6 +69,7 @@ function pickPersistedAppData(source: PersistedAppData): PersistedAppData {
     documents: source.documents,
     rentals: source.rentals,
     maintenance: source.maintenance,
+    fleetReports: source.fleetReports,
     notifications: source.notifications,
     invites: source.invites,
     incomingInvites: source.incomingInvites,
@@ -176,6 +192,7 @@ interface AppState {
   documents: CarDocument[]
   rentals: Rental[]
   maintenance: Maintenance[]
+  fleetReports: FleetReportRecord[]
   notifications: NotificationItem[]
   invites: FleetAccess[]
   incomingInvites: FleetAccess[]
@@ -207,10 +224,16 @@ interface AppState {
     input: Omit<Maintenance, 'id' | 'createdAt' | 'documents'> & {
       id?: string
       documentFiles?: File[]
-      markCarAsMaintenance?: boolean
     },
   ) => Promise<void>
   deleteMaintenance: (id: string) => Promise<void>
+  saveFleetReport: (
+    input: Omit<FleetReportRecord, 'id' | 'createdBy' | 'createdAt'> & {
+      id?: string
+      report: FleetReportSnapshot
+    },
+  ) => Promise<FleetReportRecord>
+  deleteFleetReport: (id: string) => Promise<void>
   markNotificationAsRead: (id: string) => Promise<void>
   saveInvite: (input: Omit<FleetAccess, 'id' | 'createdAt' | 'ownerId' | 'acceptedAt'>) => Promise<void>
   acceptInvite: (inviteId: string, ownerId: string) => Promise<void>
@@ -298,6 +321,7 @@ export const useAppStore = create<AppState>((set) => {
               documents: nextState.documents,
               rentals: nextState.rentals,
               maintenance: nextState.maintenance,
+              fleetReports: nextState.fleetReports,
               notifications: nextState.notifications,
               invites: nextState.invites,
               incomingInvites: nextState.incomingInvites,
@@ -480,6 +504,39 @@ export const useAppStore = create<AppState>((set) => {
       void refreshUserData(current, { showLoading: false, loadDeferredAssets: false })
     },
 
+    async saveFleetReport(input) {
+      const { profile: current } = useAppStore.getState()
+      if (!current) {
+        throw new Error('Utilizatorul nu este autentificat.')
+      }
+
+      const savedReport = await dataService.saveFleetReport(current, input)
+      set((state) =>
+        state.activeUserId !== current.id
+          ? state
+          : {
+              ...state,
+              fleetReports: upsertById(state.fleetReports, savedReport),
+            },
+      )
+      return savedReport
+    },
+
+    async deleteFleetReport(id) {
+      const { profile: current } = useAppStore.getState()
+      if (!current) return
+
+      await dataService.deleteFleetReport(current, id)
+      set((state) =>
+        state.activeUserId !== current.id
+          ? state
+          : {
+              ...state,
+              fleetReports: state.fleetReports.filter((item) => item.id !== id),
+            },
+      )
+    },
+
     async markNotificationAsRead(id) {
       const state = useAppStore.getState()
       const current = state.profile
@@ -548,6 +605,7 @@ useAppStore.subscribe((state) => {
       documents: state.documents,
       rentals: state.rentals,
       maintenance: state.maintenance,
+      fleetReports: state.fleetReports,
       notifications: state.notifications,
       invites: state.invites,
       incomingInvites: state.incomingInvites,

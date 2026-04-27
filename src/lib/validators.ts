@@ -28,10 +28,10 @@ function normalizeChassisNumber(value: string) {
 export const authSchema = z.object({
   fullName: z.preprocess(
     (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-    z.string().min(3, 'Numele complet trebuie să aibă cel puțin 3 caractere.').optional(),
+    z.string().min(3, 'Numele complet trebuie sa aiba cel putin 3 caractere.').optional(),
   ),
-  email: z.string().trim().toLowerCase().email('Introdu o adresă de email validă.'),
-  password: z.string().min(6, 'Parola trebuie să aibă minimum 6 caractere.'),
+  email: z.string().trim().toLowerCase().email('Introdu o adresa de email valida.'),
+  password: z.string().min(6, 'Parola trebuie sa aiba minimum 6 caractere.'),
 })
 
 export const carSchema = z.object({
@@ -39,82 +39,63 @@ export const carSchema = z.object({
   licensePlate: z
     .string()
     .transform(normalizeLicensePlate)
-    .pipe(z.string().min(1, 'Acest câmp este obligatoriu.').min(4, 'Numărul de înmatriculare este obligatoriu.')),
-  brand: z.string().trim().min(1, 'Acest câmp este obligatoriu.').min(2, 'Marca este obligatorie.'),
-  model: z.string().trim().min(1, 'Acest câmp este obligatoriu.'),
-  year: optionalNumberSchema(z.coerce.number().min(1950, 'Anul trebuie să fie după 1950.').max(2100, 'Anul nu este valid.')),
+    .pipe(z.string().min(1, 'Acest camp este obligatoriu.').min(4, 'Numarul de inmatriculare este obligatoriu.')),
+  brand: z.string().trim().min(1, 'Acest camp este obligatoriu.').min(2, 'Marca este obligatorie.'),
+  model: z.string().trim().min(1, 'Acest camp este obligatoriu.'),
+  year: optionalNumberSchema(z.coerce.number().min(1950, 'Anul trebuie sa fie dupa 1950.').max(2100, 'Anul nu este valid.')),
   color: z.string().optional(),
-  engineHp: z.coerce.number().min(1, 'Acest câmp este obligatoriu.'),
-  engineDisplacement: z.coerce.number().min(1, 'Acest câmp este obligatoriu.'),
-  transmission: z.enum(['manual', 'automatic'], { message: 'Selectați o opțiune.' }),
+  engineHp: z.coerce.number().min(1, 'Acest camp este obligatoriu.'),
+  engineDisplacement: z.coerce.number().min(1, 'Acest camp este obligatoriu.'),
+  transmission: z.enum(['manual', 'automatic'], { message: 'Selectati o optiune.' }),
   chassisNumber: z
     .string()
     .transform(normalizeChassisNumber)
-    .pipe(
-      z
-        .string()
-        .min(1, 'Acest câmp este obligatoriu.')
-        .regex(chassisNumberPattern, 'Seria de șasiu trebuie să aibă exact 17 caractere valide.'),
-    ),
+    .pipe(z.string().min(1, 'Acest camp este obligatoriu.').regex(chassisNumberPattern, 'Seria de sasiu trebuie sa aiba exact 17 caractere valide.')),
   category: z.literal('general').default('general'),
-  status: z.enum(['available', 'rented', 'maintenance', 'archived']),
-  purchasePrice: optionalNumberSchema(z.coerce.number().min(0, 'Prețul de achiziție nu poate fi negativ.')),
+  status: z.enum(['available', 'archived']),
+  purchasePrice: optionalNumberSchema(z.coerce.number().min(0, 'Pretul de achizitie nu poate fi negativ.')),
   purchaseCurrency: currencySchema.default('RON'),
+  annualInsuranceCost: z.coerce.number().min(0, 'Costul asigurarii nu poate fi negativ.'),
   currentKm: z.coerce.number().min(0, 'Kilometrajul nu poate fi negativ.'),
   notes: z.string().optional(),
-  serviceReturnDate: z.preprocess(
-    (value) => (value === '' || value === null || value === undefined ? undefined : value),
-    z.string().optional(),
-  ),
-  itpExpiryDate: z.string().min(1, 'Acest câmp este obligatoriu.'),
-  rcaExpiryDate: z.string().min(1, 'Acest câmp este obligatoriu.'),
-}).superRefine((value, context) => {
-  if (value.serviceReturnDate && value.status !== 'maintenance') {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Data de disponibilitate poate fi setată doar când mașina este în service.',
-      path: ['serviceReturnDate'],
-    })
-  }
+  itpExpiryDate: z.string().min(1, 'Acest camp este obligatoriu.'),
+  rcaExpiryDate: z.string().min(1, 'Acest camp este obligatoriu.'),
 })
 
 export const maintenanceSchema = z
   .object({
-    carId: z.string().min(1, 'Selectați o opțiune.'),
-    type: z.enum(['repair', 'investment', 'other'], { message: 'Selectați o opțiune.' }),
-    description: z.string().trim().min(1, 'Acest câmp este obligatoriu.').min(3, 'Titlul este obligatoriu.'),
+    carId: z.string().min(1, 'Selectati o optiune.'),
+    type: z.enum(['repair', 'investment', 'other'], { message: 'Selectati o optiune.' }),
+    description: z.string().trim().min(1, 'Acest camp este obligatoriu.').min(3, 'Titlul este obligatoriu.'),
     cost: z.coerce.number().min(0, 'Costul nu poate fi negativ.'),
-    datePerformed: z.string().min(1, 'Acest câmp este obligatoriu.'),
-    expectedCompletionDate: z.preprocess(
-      (value) => (value === '' || value === null || value === undefined ? undefined : value),
-      z.string().optional(),
-    ),
+    datePerformed: z.string().min(1, 'Acest camp este obligatoriu.'),
+    serviceEndDate: z.string().min(1, 'Acest camp este obligatoriu.'),
+    blocksAvailability: z.boolean().default(false),
     kmAtService: optionalNumberSchema(z.coerce.number().min(0, 'Kilometrajul nu poate fi negativ.')),
     notes: z.string().optional(),
-    markCarAsMaintenance: z.boolean().optional(),
   })
   .superRefine((value, context) => {
-    if (value.expectedCompletionDate && value.expectedCompletionDate < value.datePerformed) {
+    if (value.serviceEndDate < value.datePerformed) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Data estimată de ieșire din service nu poate fi înaintea datei intervenției.',
-        path: ['expectedCompletionDate'],
+        message: 'Data iesirii din service nu poate fi inaintea datei interventiei.',
+        path: ['serviceEndDate'],
       })
     }
   })
 
 export const rentalSegmentSchema = z
   .object({
-    pricePerUnit: z.coerce.number().min(1, 'Acest câmp este obligatoriu.'),
-    priceUnit: z.enum(['day', 'week', 'month'], { message: 'Selectați o opțiune.' }),
-    startDate: z.string().min(1, 'Acest câmp este obligatoriu.'),
-    endDate: z.string().min(1, 'Acest câmp este obligatoriu.'),
+    pricePerUnit: z.coerce.number().min(1, 'Acest camp este obligatoriu.'),
+    priceUnit: z.enum(['day', 'week', 'month'], { message: 'Selectati o optiune.' }),
+    startDate: z.string().min(1, 'Acest camp este obligatoriu.'),
+    endDate: z.string().min(1, 'Acest camp este obligatoriu.'),
   })
   .superRefine((value, context) => {
     if (!isOrderedDateRange(value.startDate, value.endDate)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Data de sfârșit nu poate fi înaintea datei de început.',
+        message: 'Data de sfarsit nu poate fi inaintea datei de inceput.',
         path: ['endDate'],
       })
     }
@@ -122,12 +103,12 @@ export const rentalSegmentSchema = z
 
 export const rentalSchema = z
   .object({
-    carId: z.string().min(1, 'Selectați o opțiune.'),
-    renterName: z.string().trim().min(1, 'Acest câmp este obligatoriu.').min(2, 'Prenumele este obligatoriu.'),
-    renterSurname: z.string().trim().min(1, 'Acest câmp este obligatoriu.').min(2, 'Numele este obligatoriu.'),
-    renterCnp: z.string().trim().regex(/^\d{13}$/, 'CNP-ul trebuie să aibă exact 13 cifre.'),
-    startDate: z.string().min(1, 'Acest câmp este obligatoriu.'),
-    endDate: z.string().min(1, 'Acest câmp este obligatoriu.'),
+    carId: z.string().min(1, 'Selectati o optiune.'),
+    renterName: z.string().trim().min(1, 'Acest camp este obligatoriu.').min(2, 'Prenumele este obligatoriu.'),
+    renterSurname: z.string().trim().min(1, 'Acest camp este obligatoriu.').min(2, 'Numele este obligatoriu.'),
+    renterCnp: z.string().trim().regex(/^\d{13}$/, 'CNP-ul trebuie sa aiba exact 13 cifre.'),
+    startDate: z.string().min(1, 'Acest camp este obligatoriu.'),
+    endDate: z.string().min(1, 'Acest camp este obligatoriu.'),
     advancePayment: z.coerce.number().min(0, 'Avansul nu poate fi negativ.'),
     status: z.enum(['active', 'completed', 'cancelled']),
     kmStart: optionalNumberSchema(z.coerce.number().min(0, 'Kilometrajul nu poate fi negativ.')),
@@ -141,7 +122,7 @@ export const rentalSchema = z
     if (!isOrderedDateRange(value.startDate, value.endDate)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Data de sfârșit nu poate fi înaintea datei de început.',
+        message: 'Data de sfarsit nu poate fi inaintea datei de inceput.',
         path: ['endDate'],
       })
     }
@@ -149,7 +130,7 @@ export const rentalSchema = z
     if (value.kmStart !== undefined && value.kmEnd !== undefined && value.kmEnd < value.kmStart) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Kilometrajul de retur nu poate fi mai mic decât cel de predare.',
+        message: 'Kilometrajul de retur nu poate fi mai mic decat cel de predare.',
         path: ['kmEnd'],
       })
     }
@@ -160,7 +141,7 @@ export const rentalSchema = z
       if (seen.has(key)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Acest segment de preț este deja adăugat.',
+          message: 'Acest segment de pret este deja adaugat.',
           path: ['segments', index],
         })
       }
@@ -169,7 +150,7 @@ export const rentalSchema = z
       if (segment.startDate < value.startDate || segment.endDate > value.endDate) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Segmentul trebuie să fie inclus în perioada închirierii.',
+          message: 'Segmentul trebuie sa fie inclus in perioada inchirierii.',
           path: ['segments', index],
         })
       }
@@ -181,7 +162,7 @@ export const rentalSchema = z
         if (overlaps) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'Segmentele de preț nu se pot suprapune.',
+            message: 'Segmentele de pret nu se pot suprapune.',
             path: ['segments', index],
           })
         }

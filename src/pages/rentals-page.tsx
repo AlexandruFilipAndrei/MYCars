@@ -68,7 +68,7 @@ function rangesOverlap(startA: string, endA: string, startB: string, endB: strin
 }
 
 export function RentalsPage() {
-  const { cars, rentals, profile, incomingInvites, saveRental, deleteRental } = useAppStore()
+  const { cars, rentals, maintenance, profile, incomingInvites, saveRental, deleteRental } = useAppStore()
   const { matchesOwner } = useFleetFilter()
   const [searchParams, setSearchParams] = useSearchParams()
   const [open, setOpen] = useState(false)
@@ -84,10 +84,7 @@ export function RentalsPage() {
     () => visibleCars.filter((car) => canEditCar(profile, incomingInvites, car)),
     [incomingInvites, profile, visibleCars],
   )
-  const creatableCars = useMemo(
-    () => editableCars.filter((car) => car.status !== 'maintenance' && car.status !== 'archived'),
-    [editableCars],
-  )
+  const creatableCars = useMemo(() => editableCars.filter((car) => car.status !== 'archived'), [editableCars])
   const sortedRentals = useMemo(
     () =>
       [...visibleRentals].sort((first, second) => {
@@ -149,13 +146,23 @@ export function RentalsPage() {
         .sort((first, second) => first.startDate.localeCompare(second.startDate)),
     [editingRental?.id, rentals, selectedCarId],
   )
+  const unavailableServicePeriods = useMemo(
+    () =>
+      maintenance
+        .filter((item) => item.carId === selectedCarId && item.blocksAvailability)
+        .sort((first, second) => first.datePerformed.localeCompare(second.datePerformed)),
+    [maintenance, selectedCarId],
+  )
 
   const hasConflict = useMemo(() => {
     if (selectedStatus === 'cancelled') return false
     if (!selectedCarId || !selectedStartDate || !selectedEndDate) return false
 
-    return unavailablePeriods.some((rental) => rangesOverlap(selectedStartDate, selectedEndDate, rental.startDate, rental.endDate))
-  }, [selectedCarId, selectedEndDate, selectedStartDate, selectedStatus, unavailablePeriods])
+    return (
+      unavailablePeriods.some((rental) => rangesOverlap(selectedStartDate, selectedEndDate, rental.startDate, rental.endDate)) ||
+      unavailableServicePeriods.some((item) => rangesOverlap(selectedStartDate, selectedEndDate, item.datePerformed, item.serviceEndDate))
+    )
+  }, [selectedCarId, selectedEndDate, selectedStartDate, selectedStatus, unavailablePeriods, unavailableServicePeriods])
 
   useEffect(() => {
     if (hasConflict) {
@@ -424,15 +431,13 @@ export function RentalsPage() {
                       <option
                         key={car.id}
                         value={car.id}
-                        disabled={!canEditCar(profile, incomingInvites, car) || (editingRental?.carId !== car.id && (car.status === 'maintenance' || car.status === 'archived'))}
+                        disabled={!canEditCar(profile, incomingInvites, car) || (editingRental?.carId !== car.id && car.status === 'archived')}
                       >
                         {car.brand} {car.model} - {car.licensePlate}
                         {sharedFleetLabel ? ` - ${sharedFleetLabel}` : ''}
                         {!canEditCar(profile, incomingInvites, car)
                           ? ' (doar vizualizare)'
-                          : car.status === 'maintenance'
-                            ? ' (in service)'
-                            : car.status === 'archived'
+                          : car.status === 'archived'
                               ? ' (arhivata)'
                               : ''}
                       </option>
@@ -485,7 +490,7 @@ export function RentalsPage() {
             <div className="rounded-3xl border p-4">
               <p className="font-semibold">Perioade indisponibile pentru masina selectata</p>
               {unavailablePeriods.length === 0 ? (
-                <p className="mt-2 text-sm text-muted-foreground">Nu exista alte inchirieri active sau finalizate pentru aceasta masina.</p>
+                <p className="mt-2 text-sm text-muted-foreground">Nu exista alte inchirieri salvate pentru aceasta masina.</p>
               ) : (
                 <div className="mt-3 space-y-2">
                   {unavailablePeriods.map((rental) => (

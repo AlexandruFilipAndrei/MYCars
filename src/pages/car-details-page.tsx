@@ -372,8 +372,8 @@ export function CarDetailsPage() {
                     <InfoBox label="Kilometraj" value={item.kmAtService ? `${item.kmAtService.toLocaleString('ro-RO')} km` : 'Nu este setat'} compact />
                   </div>
 
-                  {item.expectedCompletionDate ? (
-                    <p className="mt-3 text-sm text-muted-foreground">Disponibilă estimat la: {formatDate(item.expectedCompletionDate)}</p>
+                  {item.serviceEndDate ? (
+                    <p className="mt-3 text-sm text-muted-foreground">Disponibilă estimat la: {formatDate(item.serviceEndDate)}</p>
                   ) : null}
 
                   {item.notes ? <p className="mt-3 whitespace-pre-wrap rounded-2xl bg-muted p-3 text-sm">{item.notes}</p> : null}
@@ -516,6 +516,7 @@ function buildInfoItems(car: Car) {
       value: car.purchasePrice !== undefined ? formatCurrency(car.purchasePrice, car.purchaseCurrency) : 'Nu este setat',
     },
     { label: 'Monedă', value: car.purchaseCurrency },
+    { label: 'Asigurare / an', value: formatCurrency(car.annualInsuranceCost) },
     { label: 'Disponibilă estimat la', value: car.serviceReturnDate ? formatDate(car.serviceReturnDate) : 'Nu este setat' },
     { label: 'Kilometraj curent', value: `${car.currentKm.toLocaleString('ro-RO')} km` },
     { label: 'Creat la', value: formatDate(car.createdAt) },

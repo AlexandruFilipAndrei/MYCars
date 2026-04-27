@@ -6,7 +6,9 @@
   demoNotifications,
   demoProfile,
   demoRentals,
+  demoFleetReports,
 } from '@/lib/demo-data'
+import { deriveCarsOperationalState, deriveOperationalCarState } from '@/lib/fleet-report'
 import { getDocumentUrgency } from '@/lib/format'
 import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 import type {
@@ -15,6 +17,7 @@ import type {
   CarPhoto,
   DocumentType,
   FleetAccess,
+  FleetReportRecord,
   Maintenance,
   MaintenanceDocument,
   NotificationItem,
@@ -30,6 +33,7 @@ interface AppDataState {
   documents: CarDocument[]
   rentals: Rental[]
   maintenance: Maintenance[]
+  fleetReports: FleetReportRecord[]
   notifications: NotificationItem[]
   invites: FleetAccess[]
   incomingInvites: FleetAccess[]
@@ -70,6 +74,7 @@ type RemoteCarRow = {
   status: Car['status']
   purchase_price: number | null
   purchase_currency: Car['purchaseCurrency'] | null
+  annual_insurance_cost: number | null
   notes: string | null
   service_return_date: string | null
   current_km: number | null
@@ -134,7 +139,8 @@ type RemoteMaintenanceRow = {
   description: string
   cost: number
   date_performed: string
-  expected_completion_date: string | null
+  service_end_date: string | null
+  blocks_availability: boolean | null
   km_at_service: number | null
   notes: string | null
   created_at: string | null
@@ -167,6 +173,20 @@ type RemoteNotificationRow = {
   message: string
   type: NotificationItem['type'] | null
   is_read: boolean | null
+  created_at: string | null
+}
+
+type RemoteFleetReportRow = {
+  id: string
+  created_by: string
+  period_kind: FleetReportRecord['periodKind']
+  period_start: string
+  period_end: string
+  selected_owner_ids: string[] | null
+  scoring_version: string
+  ai_provider: string | null
+  ai_model: string | null
+  report: FleetReportRecord['report']
   created_at: string | null
 }
 
@@ -483,9 +503,10 @@ async function syncCarDocuments(car: Car, input: CarWriteInput): Promise<SyncCar
 }
 
 async function refreshRemoteCarStatus(carId: string) {
-  const [carResult, rentalsResult] = await Promise.all([
-    table('cars').select('status').eq('id', carId).maybeSingle(),
-    table('rentals').select('id').eq('car_id', carId).eq('status', 'active'),
+  const [carResult, rentalsResult, maintenanceResult] = await Promise.all([
+    table('cars').select('*').eq('id', carId).maybeSingle(),
+    table('rentals').select('*').eq('car_id', carId).neq('status', 'cancelled'),
+    table('maintenance').select('*').eq('car_id', carId),
   ])
 
   if (carResult.error) {
@@ -496,14 +517,33 @@ async function refreshRemoteCarStatus(carId: string) {
     throw new Error(rentalsResult.error.message)
   }
 
-  const currentStatus = carResult.data?.status as Car['status'] | undefined
-  const nextStatus = rentalsResult.data && rentalsResult.data.length > 0 ? 'rented' : currentStatus === 'rented' ? 'available' : currentStatus
+  if (maintenanceResult.error) {
+    throw new Error(maintenanceResult.error.message)
+  }
 
-  if (!nextStatus || nextStatus === currentStatus) {
+  if (!carResult.data) {
     return
   }
 
-  const update = await table('cars').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', carId)
+  const currentCar = mapCar(carResult.data as RemoteCarRow)
+  const currentStatus = currentCar.status
+  const derivedState = deriveOperationalCarState(
+    currentCar,
+    ((rentalsResult.data ?? []) as RemoteRentalRow[]).map((row) => mapRental(row, [])),
+    ((maintenanceResult.data ?? []) as RemoteMaintenanceRow[]).map(mapMaintenance),
+  )
+
+  if (derivedState.status === currentStatus && derivedState.serviceReturnDate === currentCar.serviceReturnDate) {
+    return
+  }
+
+  const update = await table('cars')
+    .update({
+      status: derivedState.status,
+      service_return_date: derivedState.serviceReturnDate ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', carId)
   if (update.error) {
     throw new Error(update.error.message)
   }
@@ -636,21 +676,27 @@ function assertDemoMaintenanceStatusAllowed(
   input: Omit<Maintenance, 'id' | 'createdAt' | 'documents'> & {
     id?: string
     documentFiles?: File[]
-    markCarAsMaintenance?: boolean
   },
 ) {
-  if (!input.markCarAsMaintenance) {
+  if (!input.blocksAvailability) {
     return
   }
 
   const selectedCar = state.cars.find((car) => car.id === input.carId)
 
   if (selectedCar?.status === 'archived') {
-    throw new Error('Nu poți marca o mașină arhivată ca fiind în service.')
+    throw new Error('Nu poti scoate din circuit o masina arhivata.')
   }
 
-  if (hasDemoActiveRentals(state, input.carId)) {
-    throw new Error('Nu poți marca mașina ca fiind în service cât timp are o închiriere activă.')
+  const hasConflict = state.rentals.some(
+    (rental) =>
+      rental.carId === input.carId &&
+      rental.status !== 'cancelled' &&
+      rangesOverlap(input.datePerformed, input.serviceEndDate, rental.startDate, rental.endDate),
+  )
+
+  if (hasConflict) {
+    throw new Error('Perioada de service care scoate masina din circuit nu poate suprapune o inchiriere.')
   }
 }
 
@@ -658,28 +704,35 @@ async function assertRemoteMaintenanceStatusAllowed(
   input: Omit<Maintenance, 'id' | 'createdAt' | 'documents'> & {
     id?: string
     documentFiles?: File[]
-    markCarAsMaintenance?: boolean
   },
 ) {
-  if (!input.markCarAsMaintenance) {
+  if (!input.blocksAvailability) {
     return
   }
 
-  const [carResult, hasActiveRental] = await Promise.all([
+  const [carResult, rentalsResult] = await Promise.all([
     table('cars').select('status').eq('id', input.carId).maybeSingle(),
-    hasRemoteActiveRentals(input.carId),
+    table('rentals').select('start_date, end_date, status').eq('car_id', input.carId).neq('status', 'cancelled'),
   ])
 
   if (carResult.error) {
     throw new Error(carResult.error.message)
   }
 
-  if ((carResult.data?.status as Car['status'] | undefined) === 'archived') {
-    throw new Error('Nu poți marca o mașină arhivată ca fiind în service.')
+  if (rentalsResult.error) {
+    throw new Error(rentalsResult.error.message)
   }
 
-  if (hasActiveRental) {
-    throw new Error('Nu poți marca mașina ca fiind în service cât timp are o închiriere activă.')
+  if ((carResult.data?.status as Car['status'] | undefined) === 'archived') {
+    throw new Error('Nu poti scoate din circuit o masina arhivata.')
+  }
+
+  const hasConflict = ((rentalsResult.data ?? []) as Array<Pick<RemoteRentalRow, 'start_date' | 'end_date' | 'status'>>).some((rental) =>
+    rangesOverlap(input.datePerformed, input.serviceEndDate, rental.start_date, rental.end_date),
+  )
+
+  if (hasConflict) {
+    throw new Error('Perioada de service care scoate masina din circuit nu poate suprapune o inchiriere.')
   }
 }
 
@@ -698,10 +751,6 @@ async function assertRemoteRentalStatusAllowed(
 
   const status = data?.status as Car['status'] | undefined
 
-  if (status === 'maintenance') {
-    throw new Error('Nu poți începe o închiriere pentru o mașină aflată în service.')
-  }
-
   if (status === 'archived') {
     throw new Error('Nu poți începe o închiriere pentru o mașină arhivată.')
   }
@@ -716,10 +765,6 @@ function assertDemoRentalStatusAllowed(
   }
 
   const selectedCar = state.cars.find((car) => car.id === input.carId)
-
-  if (selectedCar?.status === 'maintenance') {
-    throw new Error('Nu poți începe o închiriere pentru o mașină aflată în service.')
-  }
 
   if (selectedCar?.status === 'archived') {
     throw new Error('Nu poți începe o închiriere pentru o mașină arhivată.')
@@ -787,7 +832,8 @@ function normalizeCarInput(input: CarWriteInput): CarWriteInput {
     chassisNumber: normalizeChassisNumber(input.chassisNumber),
     category: input.category ?? 'general',
     purchaseCurrency: input.purchaseCurrency ?? 'RON',
-    serviceReturnDate: input.status === 'maintenance' ? input.serviceReturnDate ?? undefined : undefined,
+    annualInsuranceCost: input.annualInsuranceCost ?? 0,
+    status: input.status === 'archived' ? 'archived' : 'available',
   }
 }
 
@@ -807,8 +853,8 @@ function buildCarPayloadFromInput(input: CarWriteInput) {
     status: input.status,
     purchase_price: input.purchasePrice ?? null,
     purchase_currency: input.purchaseCurrency,
+    annual_insurance_cost: input.annualInsuranceCost,
     notes: input.notes ?? null,
-    service_return_date: input.status === 'maintenance' ? input.serviceReturnDate ?? null : null,
     current_km: input.currentKm,
     archived_at: input.archivedAt ?? null,
     updated_at: new Date().toISOString(),
@@ -831,6 +877,7 @@ function buildCarPayloadFromRow(row: RemoteCarRow) {
     status: row.status,
     purchase_price: row.purchase_price,
     purchase_currency: row.purchase_currency ?? 'RON',
+    annual_insurance_cost: row.annual_insurance_cost ?? 0,
     notes: row.notes,
     service_return_date: row.service_return_date,
     current_km: row.current_km,
@@ -846,154 +893,11 @@ function buildMaintenancePayloadFromRow(row: RemoteMaintenanceRow) {
     description: row.description,
     cost: row.cost,
     date_performed: row.date_performed,
-    expected_completion_date: row.expected_completion_date,
+    service_end_date: row.service_end_date,
+    blocks_availability: row.blocks_availability ?? false,
     km_at_service: row.km_at_service,
     notes: row.notes,
   }
-}
-
-function compareMaintenanceRecency(
-  first: Pick<Maintenance, 'id' | 'datePerformed' | 'createdAt'>,
-  second: Pick<Maintenance, 'id' | 'datePerformed' | 'createdAt'>,
-) {
-  if (first.datePerformed !== second.datePerformed) {
-    return second.datePerformed.localeCompare(first.datePerformed)
-  }
-
-  if (first.createdAt !== second.createdAt) {
-    return second.createdAt.localeCompare(first.createdAt)
-  }
-
-  return second.id.localeCompare(first.id)
-}
-
-function getLatestDemoMaintenanceForCar(state: AppDataState, carId: string) {
-  return [...state.maintenance.filter((item) => item.carId === carId)].sort(compareMaintenanceRecency)[0]
-}
-
-function syncDemoCarServiceReturnDateFromLatestMaintenance(
-  state: AppDataState,
-  carId: string,
-  options: { forceMaintenanceStatus?: boolean } = {},
-) {
-  const currentCar = state.cars.find((item) => item.id === carId)
-
-  if (!currentCar) {
-    return
-  }
-
-  if (!options.forceMaintenanceStatus && currentCar.status !== 'maintenance') {
-    return
-  }
-
-  const latestMaintenance = getLatestDemoMaintenanceForCar(state, carId)
-  const now = new Date().toISOString()
-
-  state.cars = state.cars.map((item) =>
-    item.id === carId
-      ? {
-          ...item,
-          status: options.forceMaintenanceStatus ? 'maintenance' : item.status,
-          serviceReturnDate: latestMaintenance?.expectedCompletionDate ?? undefined,
-          updatedAt: now,
-        }
-      : item,
-  )
-}
-
-function syncDemoLatestMaintenanceExpectedCompletionFromCar(
-  state: AppDataState,
-  carId: string,
-  serviceReturnDate?: string,
-) {
-  const latestMaintenance = getLatestDemoMaintenanceForCar(state, carId)
-
-  if (!latestMaintenance) {
-    return
-  }
-
-  state.maintenance = state.maintenance.map((item) =>
-    item.id === latestMaintenance.id
-      ? {
-          ...item,
-          expectedCompletionDate: serviceReturnDate ?? undefined,
-        }
-      : item,
-  )
-}
-
-async function getLatestRemoteMaintenanceForCar(carId: string) {
-  const { data, error } = await table('maintenance')
-    .select('*')
-    .eq('car_id', carId)
-    .order('date_performed', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(1)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return ((data ?? [])[0] as RemoteMaintenanceRow | undefined) ?? null
-}
-
-async function syncRemoteCarServiceReturnDateFromLatestMaintenance(
-  carId: string,
-  options: { forceMaintenanceStatus?: boolean } = {},
-) {
-  const [latestMaintenance, carResult] = await Promise.all([
-    getLatestRemoteMaintenanceForCar(carId),
-    table('cars').select('status').eq('id', carId).maybeSingle(),
-  ])
-
-  if (carResult.error) {
-    throw new Error(carResult.error.message)
-  }
-
-  const currentStatus = carResult.data?.status as Car['status'] | undefined
-
-  if (!currentStatus) {
-    return
-  }
-
-  if (!options.forceMaintenanceStatus && currentStatus !== 'maintenance') {
-    return
-  }
-
-  const { error } = await table('cars')
-    .update({
-      status: options.forceMaintenanceStatus ? 'maintenance' : currentStatus,
-      service_return_date: latestMaintenance?.expected_completion_date ?? null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', carId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-}
-
-async function syncRemoteLatestMaintenanceExpectedCompletionFromCar(
-  carId: string,
-  serviceReturnDate?: string,
-) {
-  const latestMaintenance = await getLatestRemoteMaintenanceForCar(carId)
-
-  if (!latestMaintenance) {
-    return null
-  }
-
-  const { error } = await table('maintenance')
-    .update({
-      expected_completion_date: serviceReturnDate ?? null,
-    })
-    .eq('id', latestMaintenance.id)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return latestMaintenance
 }
 
 async function hasRemoteActiveRentals(carId: string, excludeRentalId?: string) {
@@ -1018,31 +922,20 @@ function hasDemoActiveRentals(state: AppDataState, carId: string, excludeRentalI
 function assertDemoCarStatusAllowed(state: AppDataState, input: CarWriteInput) {
   const hasActiveRental = input.id ? hasDemoActiveRentals(state, input.id) : false
 
-  if (hasActiveRental && input.status !== 'rented') {
-    throw new Error('Mașina are o închiriere activă și trebuie să rămână în starea Închiriată.')
-  }
-
-  if (!hasActiveRental && input.status === 'rented') {
-    throw new Error('Nu poți marca mașina ca Închiriată fără o închiriere activă.')
+  if (hasActiveRental && input.status === 'archived') {
+    throw new Error('Nu poti arhiva o masina care are o inchiriere activa.')
   }
 }
 
 async function assertRemoteCarStatusAllowed(input: CarWriteInput) {
   if (!input.id) {
-    if (input.status === 'rented') {
-      throw new Error('Nu poți marca mașina ca Închiriată fără o închiriere activă.')
-    }
     return
   }
 
   const hasActiveRental = await hasRemoteActiveRentals(input.id)
 
-  if (hasActiveRental && input.status !== 'rented') {
-    throw new Error('Mașina are o închiriere activă și trebuie să rămână în starea Închiriată.')
-  }
-
-  if (!hasActiveRental && input.status === 'rented') {
-    throw new Error('Nu poți marca mașina ca Închiriată fără o închiriere activă.')
+  if (hasActiveRental && input.status === 'archived') {
+    throw new Error('Nu poti arhiva o masina care are o inchiriere activa.')
   }
 }
 
@@ -1148,26 +1041,43 @@ async function ensureRemoteRentalAvailability(
     return
   }
 
-  const query = table('rentals')
-    .select('id, start_date, end_date')
-    .eq('car_id', input.carId)
-    .neq('status', 'cancelled')
+  const [rentalsResult, maintenanceResult] = await Promise.all([
+    table('rentals')
+      .select('id, start_date, end_date')
+      .eq('car_id', input.carId)
+      .neq('status', 'cancelled'),
+    table('maintenance')
+      .select('id, date_performed, service_end_date, blocks_availability')
+      .eq('car_id', input.carId)
+      .eq('blocks_availability', true),
+  ])
 
-  if (input.id) {
-    query.neq('id', input.id)
+  if (rentalsResult.error) {
+    throw new Error(rentalsResult.error.message)
   }
 
-  const { data, error } = await query
-  if (error) {
-    throw new Error(error.message)
+  if (maintenanceResult.error) {
+    throw new Error(maintenanceResult.error.message)
   }
 
-  const hasConflict = ((data ?? []) as Array<Pick<RemoteRentalRow, 'id' | 'start_date' | 'end_date'>>).some((rental) =>
+  const rentalRows = (rentalsResult.data ?? []) as Array<Pick<RemoteRentalRow, 'id' | 'start_date' | 'end_date'>>
+  const maintenanceRows = (maintenanceResult.data ?? []) as Array<Pick<RemoteMaintenanceRow, 'id' | 'date_performed' | 'service_end_date' | 'blocks_availability'>>
+
+  const filteredRentalRows = input.id ? rentalRows.filter((rental) => rental.id !== input.id) : rentalRows
+  const hasRentalConflict = filteredRentalRows.some((rental) =>
     rangesOverlap(input.startDate, input.endDate, rental.start_date, rental.end_date),
   )
 
-  if (hasConflict) {
-    throw new Error('Mașina este deja închiriată în perioada selectată.')
+  if (hasRentalConflict) {
+    throw new Error('Masina este deja inchiriata in perioada selectata.')
+  }
+
+  const hasMaintenanceConflict = maintenanceRows.some((item) =>
+    rangesOverlap(input.startDate, input.endDate, item.date_performed, item.service_end_date ?? item.date_performed),
+  )
+
+  if (hasMaintenanceConflict) {
+    throw new Error('Masina are deja o perioada de service care o scoate din circuit in intervalul selectat.')
   }
 }
 
@@ -1179,7 +1089,7 @@ function ensureDemoRentalAvailability(
     return
   }
 
-  const hasConflict = state.rentals.some(
+  const hasRentalConflict = state.rentals.some(
     (rental) =>
       rental.id !== input.id &&
       rental.carId === input.carId &&
@@ -1187,8 +1097,19 @@ function ensureDemoRentalAvailability(
       rangesOverlap(input.startDate, input.endDate, rental.startDate, rental.endDate),
   )
 
-  if (hasConflict) {
-    throw new Error('Mașina este deja închiriată în perioada selectată.')
+  if (hasRentalConflict) {
+    throw new Error('Masina este deja inchiriata in perioada selectata.')
+  }
+
+  const hasMaintenanceConflict = state.maintenance.some(
+    (item) =>
+      item.carId === input.carId &&
+      item.blocksAvailability &&
+      rangesOverlap(input.startDate, input.endDate, item.datePerformed, item.serviceEndDate),
+  )
+
+  if (hasMaintenanceConflict) {
+    throw new Error('Masina are deja o perioada de service care o scoate din circuit in intervalul selectat.')
   }
 }
 
@@ -1205,16 +1126,16 @@ function refreshDemoCarStatuses(state: AppDataState, carIds: string[]) {
       return car
     }
 
-    const hasActiveRental = state.rentals.some((rental) => rental.carId === car.id && rental.status === 'active')
-    const nextStatus = hasActiveRental ? 'rented' : car.status === 'rented' ? 'available' : car.status
+    const derivedState = deriveOperationalCarState(car, state.rentals, state.maintenance)
 
-    if (nextStatus === car.status) {
+    if (derivedState.status === car.status && derivedState.serviceReturnDate === car.serviceReturnDate) {
       return car
     }
 
     return {
       ...car,
-      status: nextStatus,
+      status: derivedState.status,
+      serviceReturnDate: derivedState.serviceReturnDate,
       updatedAt: now,
     }
   })
@@ -1232,11 +1153,12 @@ function createDemoState(user: AppUser): AppDataState {
   if (user.id === 'demo-user') {
     return {
       profile: demoProfile,
-      cars: demoCars,
+      cars: deriveCarsOperationalState(demoCars, demoRentals, demoMaintenance),
       carPhotos: [],
       documents: demoDocuments,
       rentals: demoRentals,
       maintenance: demoMaintenance,
+      fleetReports: demoFleetReports,
       notifications: demoNotifications,
       invites: demoInvites,
       incomingInvites: [],
@@ -1255,16 +1177,46 @@ function createDemoState(user: AppUser): AppDataState {
     documents: [],
     rentals: [],
     maintenance: [],
+    fleetReports: [],
     notifications: [],
     invites: [],
     incomingInvites: [],
   }
 }
 
+function normalizeLegacyDemoState(state: AppDataState) {
+  const normalizedMaintenance = state.maintenance.map((item) => {
+    const legacyItem = item as Maintenance & { expectedCompletionDate?: string }
+
+    return {
+      ...item,
+      serviceEndDate: item.serviceEndDate ?? legacyItem.expectedCompletionDate ?? item.datePerformed,
+      blocksAvailability: item.blocksAvailability ?? Boolean(legacyItem.expectedCompletionDate),
+      documents: item.documents ?? [],
+    }
+  })
+
+  const normalizedCars = deriveCarsOperationalState(
+    state.cars.map((car) => ({
+      ...car,
+      annualInsuranceCost: car.annualInsuranceCost ?? 0,
+    })),
+    state.rentals,
+    normalizedMaintenance,
+  )
+
+  return {
+    ...state,
+    cars: normalizedCars,
+    maintenance: normalizedMaintenance,
+    fleetReports: state.fleetReports ?? [],
+  }
+}
+
 function readStoredDemoState(userId: string) {
   try {
     const raw = localStorage.getItem(getStorageKey(userId))
-    return raw ? (JSON.parse(raw) as AppDataState) : null
+    return raw ? normalizeLegacyDemoState(JSON.parse(raw) as AppDataState) : null
   } catch {
     return null
   }
@@ -1281,7 +1233,7 @@ function readDemoState(user: AppUser) {
   }
 
   try {
-    return JSON.parse(raw) as AppDataState
+    return normalizeLegacyDemoState(JSON.parse(raw) as AppDataState)
   } catch {
     const state = createDemoState(user)
     localStorage.setItem(storageKey, JSON.stringify(state))
@@ -1376,6 +1328,7 @@ function mapCar(row: RemoteCarRow): Car {
     status: row.status,
     purchasePrice: row.purchase_price ?? undefined,
     purchaseCurrency: row.purchase_currency ?? 'RON',
+    annualInsuranceCost: row.annual_insurance_cost ?? 0,
     notes: row.notes ?? undefined,
     serviceReturnDate: row.service_return_date ?? undefined,
     currentKm: row.current_km ?? 0,
@@ -1452,11 +1405,28 @@ function mapMaintenance(row: RemoteMaintenanceRow): Maintenance {
     description: row.description,
     cost: row.cost,
     datePerformed: row.date_performed,
-    expectedCompletionDate: row.expected_completion_date ?? undefined,
+    serviceEndDate: row.service_end_date ?? row.date_performed,
+    blocksAvailability: row.blocks_availability ?? false,
     kmAtService: row.km_at_service ?? undefined,
     notes: row.notes ?? undefined,
     createdAt: row.created_at ?? new Date().toISOString(),
     documents: [],
+  }
+}
+
+function mapFleetReport(row: RemoteFleetReportRow): FleetReportRecord {
+  return {
+    id: row.id,
+    createdBy: row.created_by,
+    periodKind: row.period_kind,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    selectedOwnerIds: row.selected_owner_ids ?? [],
+    scoringVersion: row.scoring_version,
+    aiProvider: row.ai_provider ?? undefined,
+    aiModel: row.ai_model ?? undefined,
+    report: row.report,
+    createdAt: row.created_at ?? new Date().toISOString(),
   }
 }
 
@@ -1558,13 +1528,14 @@ async function loadRemoteDeferredAssets(): Promise<DeferredAssetsState> {
 }
 
 async function bootstrapRemote(user: AppUser): Promise<AppDataState> {
-  const [profileResult, carsResult, documentsResult, rentalsResult, segmentsResult, maintenanceResult, invitesResult, notificationsResult] = await Promise.all([
+  const [profileResult, carsResult, documentsResult, rentalsResult, segmentsResult, maintenanceResult, fleetReportsResult, invitesResult, notificationsResult] = await Promise.all([
     table('profiles').select('id, full_name, email, created_at').eq('id', user.id).maybeSingle(),
     table('cars').select('*').order('created_at', { ascending: false }),
     table('car_documents').select('*').order('created_at', { ascending: false }),
     table('rentals').select('*').order('created_at', { ascending: false }),
     table('rental_price_segments').select('*').order('created_at', { ascending: true }),
     table('maintenance').select('*').order('created_at', { ascending: false }),
+    table('fleet_reports').select('*').order('created_at', { ascending: false }),
     table('fleet_access').select('*').order('created_at', { ascending: false }),
     table('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
   ])
@@ -1576,6 +1547,7 @@ async function bootstrapRemote(user: AppUser): Promise<AppDataState> {
     rentalsResult.error ||
     segmentsResult.error ||
     maintenanceResult.error ||
+    fleetReportsResult.error ||
     invitesResult.error ||
     notificationsResult.error
   ) {
@@ -1586,6 +1558,7 @@ async function bootstrapRemote(user: AppUser): Promise<AppDataState> {
         rentalsResult.error?.message ||
         segmentsResult.error?.message ||
         maintenanceResult.error?.message ||
+        fleetReportsResult.error?.message ||
         invitesResult.error?.message ||
         notificationsResult.error?.message ||
         'Nu am putut încărca datele din Supabase.',
@@ -1611,6 +1584,7 @@ async function bootstrapRemote(user: AppUser): Promise<AppDataState> {
     ...mapMaintenance(row),
     documents: [],
   }))
+  const fleetReports = ((fleetReportsResult.data ?? []) as RemoteFleetReportRow[]).map(mapFleetReport)
   const ownerIds = Array.from(new Set(((invitesResult.data ?? []) as RemoteFleetAccessRow[]).map((invite) => invite.owner_id)))
   const ownerProfilesResult =
     ownerIds.length > 0
@@ -1642,14 +1616,16 @@ async function bootstrapRemote(user: AppUser): Promise<AppDataState> {
   const storedDocumentNotifications = persistedNotifications.filter((item) => item.documentId)
   const extraNotifications = persistedNotifications.filter((item) => !item.documentId)
   const notifications = [...extraNotifications, ...buildNotifications(documents, user.id, storedDocumentNotifications)]
+  const operationalCars = deriveCarsOperationalState(cars, rentals, maintenance)
 
   return {
     profile,
-    cars,
+    cars: operationalCars,
     carPhotos: [],
     documents,
     rentals,
     maintenance,
+    fleetReports,
     notifications,
     invites,
     incomingInvites,
@@ -1765,14 +1741,11 @@ export const dataService = {
       state.cars = current ? state.cars.map((item) => (item.id === normalizedInput.id ? car : item)) : [car, ...state.cars]
       state.documents = [...nextDocuments, ...state.documents.filter((item) => item.carId !== car.id)]
       state.carPhotos = nextCarPhotos.length > 0 ? [...nextCarPhotos, ...state.carPhotos] : state.carPhotos
-
-      if (car.status === 'maintenance') {
-        syncDemoLatestMaintenanceExpectedCompletionFromCar(state, car.id, car.serviceReturnDate)
-      }
+      refreshDemoCarStatuses(state, [car.id])
 
       revokeDemoBlobUrls([...removedDocumentUrls, ...replacedDocumentUrls])
       writeDemoState(user.id, state)
-      return car
+      return state.cars.find((item) => item.id === car.id) ?? car
     }
 
     await ensureRemoteCarIdentifiersAvailable(normalizedInput)
@@ -1795,7 +1768,6 @@ export const dataService = {
 
     const savedCar = mapCar(data as RemoteCarRow)
     let documentSyncResult: SyncCarDocumentsResult | null = null
-    let previousSyncedMaintenanceRow: RemoteMaintenanceRow | null = null
 
     try {
       documentSyncResult = await syncCarDocuments(savedCar, normalizedInput)
@@ -1803,24 +1775,22 @@ export const dataService = {
       if (normalizedInput.photoFiles?.length) {
         await addCarPhotos(savedCar, normalizedInput.photoFiles)
       }
-
-      if (savedCar.status === 'maintenance') {
-        previousSyncedMaintenanceRow = await syncRemoteLatestMaintenanceExpectedCompletionFromCar(savedCar.id, savedCar.serviceReturnDate)
-      }
+      await refreshRemoteCarStatus(savedCar.id)
 
       if (documentSyncResult.obsoletePaths.length > 0) {
         void tryRemoveStorageFiles('car-documents', documentSyncResult.obsoletePaths)
       }
 
-      return savedCar
+      const refreshedCarResult = await table('cars').select('*').eq('id', savedCar.id).maybeSingle()
+      if (refreshedCarResult.error) {
+        throw new Error(refreshedCarResult.error.message)
+      }
+
+      return refreshedCarResult.data ? mapCar(refreshedCarResult.data as RemoteCarRow) : savedCar
     } catch (saveError) {
       if (normalizedInput.id) {
         if (previousCarRow) {
           await table('cars').update(buildCarPayloadFromRow(previousCarRow)).eq('id', previousCarRow.id)
-        }
-
-        if (previousSyncedMaintenanceRow) {
-          await restoreMaintenanceRow(previousSyncedMaintenanceRow)
         }
 
         if (documentSyncResult) {
@@ -2059,14 +2029,7 @@ export const dataService = {
       }
     }
 
-    if (input.status === 'active') {
-      const updateCar = await table('cars').update({ status: 'rented', updated_at: new Date().toISOString() }).eq('id', input.carId)
-      if (updateCar.error) {
-        throw new Error(updateCar.error.message)
-      }
-    } else {
-      await refreshRemoteCarStatus(input.carId)
-    }
+    await refreshRemoteCarStatus(input.carId)
 
     if (previousCarId && previousCarId !== input.carId) {
       await refreshRemoteCarStatus(previousCarId)
@@ -2081,12 +2044,7 @@ export const dataService = {
       const rental = state.rentals.find((item) => item.id === id)
       state.rentals = state.rentals.filter((item) => item.id !== id)
       if (rental) {
-        const hasOtherActive = state.rentals.some((item) => item.carId === rental.carId && item.status === 'active')
-        state.cars = state.cars.map((car) =>
-          car.id === rental.carId && car.status === 'rented' && !hasOtherActive
-            ? { ...car, status: 'available', updatedAt: new Date().toISOString() }
-            : car,
-        )
+        refreshDemoCarStatuses(state, [rental.carId])
       }
       writeDemoState(user.id, state)
       return
@@ -2112,7 +2070,6 @@ export const dataService = {
     input: Omit<Maintenance, 'id' | 'createdAt' | 'documents'> & {
       id?: string
       documentFiles?: File[]
-      markCarAsMaintenance?: boolean
     },
   ) {
     if (isDemoUser(user)) {
@@ -2143,15 +2100,10 @@ export const dataService = {
         : [maintenance, ...state.maintenance]
 
       const affectedCarIds = Array.from(new Set([previousCarId, input.carId].filter((carId): carId is string => Boolean(carId))))
-
-      for (const carId of affectedCarIds) {
-        syncDemoCarServiceReturnDateFromLatestMaintenance(state, carId, {
-          forceMaintenanceStatus: input.markCarAsMaintenance && carId === input.carId,
-        })
-      }
+      refreshDemoCarStatuses(state, affectedCarIds)
 
       writeDemoState(user.id, state)
-      return maintenance
+      return state.maintenance.find((item) => item.id === maintenance.id) ?? maintenance
     }
 
     await assertRemoteMaintenanceStatusAllowed(input)
@@ -2169,7 +2121,8 @@ export const dataService = {
       description: input.description,
       cost: input.cost,
       date_performed: input.datePerformed,
-      expected_completion_date: input.expectedCompletionDate ?? null,
+      service_end_date: input.serviceEndDate,
+      blocks_availability: input.blocksAvailability ?? false,
       km_at_service: input.kmAtService ?? null,
       notes: input.notes ?? null,
     }
@@ -2192,12 +2145,7 @@ export const dataService = {
       }
 
       const affectedCarIds = Array.from(new Set([previousCarId, input.carId].filter((carId): carId is string => Boolean(carId))))
-
-      for (const carId of affectedCarIds) {
-        await syncRemoteCarServiceReturnDateFromLatestMaintenance(carId, {
-          forceMaintenanceStatus: input.markCarAsMaintenance && carId === input.carId,
-        })
-      }
+      await Promise.all(affectedCarIds.map((carId) => refreshRemoteCarStatus(carId)))
 
       return maintenance
     } catch (saveError) {
@@ -2218,7 +2166,7 @@ export const dataService = {
 
       for (const carId of affectedCarIds) {
         try {
-          await syncRemoteCarServiceReturnDateFromLatestMaintenance(carId)
+          await refreshRemoteCarStatus(carId)
         } catch {
           // Best-effort sync after rollback.
         }
@@ -2235,7 +2183,7 @@ export const dataService = {
       revokeDemoBlobUrls(deletedMaintenance?.documents.map((document) => document.fileUrl) ?? [])
       state.maintenance = state.maintenance.filter((item) => item.id !== id)
       if (deletedMaintenance) {
-        syncDemoCarServiceReturnDateFromLatestMaintenance(state, deletedMaintenance.carId)
+        refreshDemoCarStatuses(state, [deletedMaintenance.carId])
       }
       writeDemoState(user.id, state)
       return
@@ -2259,7 +2207,73 @@ export const dataService = {
 
     const affectedCarId = maintenanceResult.data?.car_id
     if (affectedCarId) {
-      await syncRemoteCarServiceReturnDateFromLatestMaintenance(affectedCarId)
+      await refreshRemoteCarStatus(affectedCarId)
+    }
+  },
+
+  async saveFleetReport(
+    user: AppUser,
+    input: Omit<FleetReportRecord, 'id' | 'createdBy' | 'createdAt'> & {
+      id?: string
+    },
+  ) {
+    const createdAt = new Date().toISOString()
+    const reportRecord: FleetReportRecord = {
+      id: input.id ?? crypto.randomUUID(),
+      createdBy: user.id,
+      periodKind: input.periodKind,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      selectedOwnerIds: input.selectedOwnerIds,
+      scoringVersion: input.scoringVersion,
+      aiProvider: input.aiProvider,
+      aiModel: input.aiModel,
+      report: input.report,
+      createdAt,
+    }
+
+    if (isDemoUser(user)) {
+      const state = readDemoState(user)
+      state.fleetReports = [reportRecord, ...state.fleetReports.filter((item) => item.id !== reportRecord.id)]
+      writeDemoState(user.id, state)
+      return reportRecord
+    }
+
+    const { data, error } = await table('fleet_reports')
+      .insert({
+        id: reportRecord.id,
+        created_by: user.id,
+        period_kind: reportRecord.periodKind,
+        period_start: reportRecord.periodStart,
+        period_end: reportRecord.periodEnd,
+        selected_owner_ids: reportRecord.selectedOwnerIds,
+        scoring_version: reportRecord.scoringVersion,
+        ai_provider: reportRecord.aiProvider ?? null,
+        ai_model: reportRecord.aiModel ?? null,
+        report: reportRecord.report,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return mapFleetReport(data as RemoteFleetReportRow)
+  },
+
+  async deleteFleetReport(user: AppUser, id: string) {
+    if (isDemoUser(user)) {
+      const state = readDemoState(user)
+      state.fleetReports = state.fleetReports.filter((item) => item.id !== id)
+      writeDemoState(user.id, state)
+      return
+    }
+
+    const { error } = await table('fleet_reports').delete().eq('id', id)
+
+    if (error) {
+      throw new Error(error.message)
     }
   },
 

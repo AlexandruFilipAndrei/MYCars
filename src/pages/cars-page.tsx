@@ -65,8 +65,8 @@ export function CarsPage() {
         }
 
         if (first.status === 'maintenance' && second.status === 'maintenance') {
-          const firstExpectedDate = first.serviceReturnDate ?? latestMaintenanceByCarId.get(first.id)?.expectedCompletionDate
-          const secondExpectedDate = second.serviceReturnDate ?? latestMaintenanceByCarId.get(second.id)?.expectedCompletionDate
+          const firstExpectedDate = first.serviceReturnDate ?? latestMaintenanceByCarId.get(first.id)?.serviceEndDate
+          const secondExpectedDate = second.serviceReturnDate ?? latestMaintenanceByCarId.get(second.id)?.serviceEndDate
 
           if (firstExpectedDate && secondExpectedDate && firstExpectedDate !== secondExpectedDate) {
             return firstExpectedDate.localeCompare(secondExpectedDate)
@@ -135,7 +135,7 @@ export function CarsPage() {
           {filteredCars.map((car) => {
             const canEdit = canEditCar(profile, incomingInvites, car)
             const currentMaintenance = latestMaintenanceByCarId.get(car.id)
-            const serviceAvailabilityDate = car.serviceReturnDate ?? currentMaintenance?.expectedCompletionDate
+            const serviceAvailabilityDate = car.serviceReturnDate ?? currentMaintenance?.serviceEndDate
             const sharedFleetLabel = getSharedFleetLabel(profile, incomingInvites, car.ownerId)
 
             return (
