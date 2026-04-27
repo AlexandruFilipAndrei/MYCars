@@ -116,17 +116,45 @@ export function FleetReportPage() {
   }
 
   const handlePrintPdf = (report: FleetReportRecord) => {
-    const popup = window.open('', '_blank', 'width=1280,height=900')
+    const printFrame = document.createElement('iframe')
+    printFrame.title = 'Raport flota PDF'
+    printFrame.style.position = 'fixed'
+    printFrame.style.right = '0'
+    printFrame.style.bottom = '0'
+    printFrame.style.width = '1px'
+    printFrame.style.height = '1px'
+    printFrame.style.border = '0'
+    printFrame.style.opacity = '0'
+    printFrame.style.pointerEvents = 'none'
 
-    if (!popup) {
-      toast.error('Browserul a blocat fereastra de print. Permite popup-ul si incearca din nou.')
+    document.body.appendChild(printFrame)
+
+    const printWindow = printFrame.contentWindow
+    const printDocument = printWindow?.document
+
+    if (!printWindow || !printDocument) {
+      printFrame.remove()
+      toast.error('Nu am putut pregati raportul pentru print.')
       return
     }
 
-    popup.document.open()
-    popup.document.write(buildReportPrintHtml(report))
-    popup.document.close()
-    popup.focus()
+    const cleanup = () => {
+      window.setTimeout(() => printFrame.remove(), 500)
+    }
+
+    printWindow.addEventListener('afterprint', cleanup, { once: true })
+    printDocument.open()
+    printDocument.write(buildReportPrintHtml(report))
+    printDocument.close()
+    printWindow.focus()
+    window.setTimeout(() => {
+      printWindow.print()
+      window.setTimeout(() => {
+        if (document.body.contains(printFrame)) {
+          printFrame.remove()
+        }
+      }, 60000)
+    }, 100)
   }
 
   const handleDeleteReport = async () => {
@@ -663,12 +691,6 @@ function buildReportPrintHtml(report: FleetReportRecord) {
           .page { padding: 0; max-width: none; }
         }
       </style>
-      <script>
-        window.addEventListener('load', () => {
-          window.setTimeout(() => window.print(), 150);
-        });
-        window.addEventListener('afterprint', () => window.close());
-      </script>
     </head>
     <body>
       <div class="page">
