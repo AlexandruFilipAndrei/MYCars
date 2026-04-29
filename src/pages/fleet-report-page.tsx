@@ -383,7 +383,7 @@ function ReportSummary({
         </CardHeader>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[190px_repeat(3,minmax(0,1fr))]">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[170px_repeat(3,minmax(0,1fr))]">
         {summaryCards.map((card) => (
           <Card key={card.label}>
             <CardContent className="min-w-0 p-5">
@@ -392,7 +392,7 @@ function ReportSummary({
                 className={
                   card.kind === 'score'
                     ? 'mt-2 font-display text-3xl font-bold leading-tight tabular-nums'
-                    : 'mt-2 break-words font-display text-2xl font-bold leading-tight tabular-nums xl:whitespace-nowrap xl:text-[1.65rem] 2xl:text-[1.75rem]'
+                    : 'mt-2 break-words font-display text-2xl font-bold leading-tight tabular-nums xl:whitespace-nowrap xl:text-[1.55rem] 2xl:text-[1.7rem]'
                 }
               >
                 {card.value}
