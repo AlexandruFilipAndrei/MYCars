@@ -53,6 +53,17 @@ function getSegmentRevenueInBucket(segment: RentalPriceSegment, bucketStart: Dat
   return overlapDays > 0 ? calculateSegmentAccruedRevenue(segment, overlapDays) : 0
 }
 
+function segmentOverlapsPeriod(segment: RentalPriceSegment, periodStart: Date, periodEnd: Date) {
+  const start = parseDate(segment.startDate)
+  const end = parseDate(segment.endDate)
+
+  return Boolean(start && end && getInclusiveOverlapDays(start, end, periodStart, periodEnd) > 0)
+}
+
+function rentalOverlapsPeriod(rental: Rental, periodStart: Date, periodEnd: Date) {
+  return rental.status !== 'cancelled' && rental.segments.some((segment) => segmentOverlapsPeriod(segment, periodStart, periodEnd))
+}
+
 function getMaintenanceCostInBucket(item: Maintenance, bucketStart: Date, bucketEnd: Date) {
   const datePerformed = parseDate(item.datePerformed)
 
@@ -61,6 +72,12 @@ function getMaintenanceCostInBucket(item: Maintenance, bucketStart: Date, bucket
   }
 
   return item.cost
+}
+
+function maintenanceIsInPeriod(item: Maintenance, periodStart: Date, periodEnd: Date) {
+  const datePerformed = parseDate(item.datePerformed)
+
+  return Boolean(datePerformed && datePerformed >= periodStart && datePerformed <= periodEnd)
 }
 
 function getFinancialYears(rentals: Rental[], maintenance: Maintenance[]) {
@@ -190,7 +207,36 @@ export function StatisticsPage() {
   )
   const years = useMemo(() => getFinancialYears(filteredRentals, filteredMaintenance), [filteredMaintenance, filteredRentals])
   const buckets = useMemo(() => buildBuckets(period, years), [period, years])
+  const periodRange = useMemo(
+    () => ({
+      start: buckets[0]?.start,
+      end: buckets[buckets.length - 1]?.end,
+    }),
+    [buckets],
+  )
   const chartData = useMemo(() => buildStatisticsData(buckets, filteredRentals, filteredMaintenance), [buckets, filteredMaintenance, filteredRentals])
+  const periodRentals = useMemo(() => {
+    if (!periodRange.start || !periodRange.end) {
+      return []
+    }
+
+    return filteredRentals.filter((rental) => rentalOverlapsPeriod(rental, periodRange.start!, periodRange.end!))
+  }, [filteredRentals, periodRange.end, periodRange.start])
+  const periodMaintenance = useMemo(() => {
+    if (!periodRange.start || !periodRange.end) {
+      return []
+    }
+
+    return filteredMaintenance.filter((item) => maintenanceIsInPeriod(item, periodRange.start!, periodRange.end!))
+  }, [filteredMaintenance, periodRange.end, periodRange.start])
+  const periodCarCount = useMemo(() => {
+    const carIds = new Set<string>()
+
+    periodRentals.forEach((rental) => carIds.add(rental.carId))
+    periodMaintenance.forEach((item) => carIds.add(item.carId))
+
+    return carIds.size
+  }, [periodMaintenance, periodRentals])
   const totals = useMemo(
     () =>
       chartData.reduce(
@@ -289,9 +335,9 @@ export function StatisticsPage() {
           <CardTitle>Detalii perioada</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
-          <Summary label="Inchirieri analizate" value={String(filteredRentals.filter((rental) => rental.status !== 'cancelled').length)} compact />
-          <Summary label="Interventii analizate" value={String(filteredMaintenance.length)} compact />
-          <Summary label="Masini in filtrul actual" value={String(filteredCars.length)} compact />
+          <Summary label="Inchirieri in perioada" value={String(periodRentals.length)} compact />
+          <Summary label="Interventii in perioada" value={String(periodMaintenance.length)} compact />
+          <Summary label="Masini cu activitate" value={String(periodCarCount)} compact />
         </CardContent>
       </Card>
     </div>
