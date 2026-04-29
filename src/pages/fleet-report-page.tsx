@@ -386,9 +386,9 @@ function ReportSummary({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card) => (
           <Card key={card.label}>
-            <CardContent className="p-5">
+            <CardContent className="min-w-0 p-5">
               <p className="text-sm text-muted-foreground">{card.label}</p>
-              <p className="mt-2 font-display text-3xl font-bold">{card.value}</p>
+              <p className="mt-2 break-words font-display text-2xl font-bold leading-tight tabular-nums 2xl:text-3xl">{card.value}</p>
             </CardContent>
           </Card>
         ))}
@@ -472,8 +472,9 @@ function CarsSection({ report }: { report: FleetReportSnapshot }) {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <Link to={`/masini/${car.carId}`} className="font-display text-2xl font-bold hover:text-primary">
-                    {car.label}
+                    {getCarReportIdentifier(car)}
                   </Link>
+                  <p className="mt-1 text-sm text-muted-foreground">{getCarReportModelLabel(car)}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Badge variant={getStatusBadgeVariant(car.status)}>{getStatusLabel(car.status)}</Badge>
                     <Badge variant={getVerdictBadgeVariant(car.score)}>{getFleetReportVerdictLabel(car.verdict)}</Badge>
@@ -503,11 +504,19 @@ function CarsSection({ report }: { report: FleetReportSnapshot }) {
   )
 }
 
+function getCarReportIdentifier(car: Pick<FleetReportSnapshot['cars'][number], 'licensePlate' | 'label'>) {
+  return car.licensePlate || car.label
+}
+
+function getCarReportModelLabel(car: Pick<FleetReportSnapshot['cars'][number], 'brand' | 'model'>) {
+  return `${car.brand} ${car.model}`.trim()
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-muted p-4">
+    <div className="min-w-0 rounded-2xl bg-muted p-4">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 font-semibold">{value}</p>
+      <p className="mt-1 break-words font-semibold leading-snug tabular-nums">{value}</p>
     </div>
   )
 }
@@ -640,9 +649,10 @@ function buildReportPrintHtml(report: FleetReportRecord) {
         }
         .stat .value {
           margin-top: 10px;
-          font-size: 28px;
+          font-size: 24px;
           font-weight: 800;
           line-height: 1.1;
+          overflow-wrap: anywhere;
         }
         .section {
           margin-top: 22px;
@@ -691,6 +701,11 @@ function buildReportPrintHtml(report: FleetReportRecord) {
         }
         .car-name {
           font-weight: 700;
+        }
+        .car-model {
+          margin-top: 3px;
+          color: var(--muted);
+          font-size: 12px;
         }
         .car-note {
           margin-top: 6px;
@@ -783,7 +798,7 @@ function buildReportPrintHtml(report: FleetReportRecord) {
           <table>
             <thead>
               <tr>
-                <th>Masina</th>
+                <th>Nr. inmatriculare</th>
                 <th>Scor</th>
                 <th>Venituri actuale</th>
                 <th>Costuri actuale</th>
@@ -797,7 +812,8 @@ function buildReportPrintHtml(report: FleetReportRecord) {
                   (car) => `
                     <tr>
                       <td>
-                        <div class="car-name">${escapeHtml(car.label)}</div>
+                        <div class="car-name">${escapeHtml(getCarReportIdentifier(car))}</div>
+                        <div class="car-model">${escapeHtml(getCarReportModelLabel(car))}</div>
                       </td>
                       <td>${car.score}/100</td>
                       <td>${escapeHtml(formatCurrency(car.revenue))}</td>

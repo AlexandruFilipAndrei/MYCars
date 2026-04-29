@@ -397,19 +397,25 @@ function getTopCommentaryCars(report: FleetReportSnapshot) {
   return [...uniqueCars.values()]
 }
 
+function getReportCarReference(car?: Pick<FleetReportCarScore, 'licensePlate' | 'label'>) {
+  return car?.licensePlate || car?.label || 'Masina analizata'
+}
+
 export function buildFallbackFleetReportAiSummary(report: FleetReportSnapshot): FleetReportAiSummary {
   const strongestCar = report.cars[0]
   const weakestCar = [...report.cars].sort((first, second) => first.score - second.score)[0]
+  const strongestCarReference = getReportCarReference(strongestCar)
+  const weakestCarReference = getReportCarReference(weakestCar)
   const highlights = [
     strongestCar
-      ? `${strongestCar.label} are cel mai bun scor, ${strongestCar.score}/100, si un profit actual de ${Math.round(strongestCar.profit)} RON.`
+      ? `${strongestCarReference} are cel mai bun scor, ${strongestCar.score}/100, si un profit actual de ${Math.round(strongestCar.profit)} RON.`
       : 'Nu exista masini suficient de bine populate pentru a scoate un lider clar.',
     `Profitul actual al flotei este de ${Math.round(report.totals.totalProfit)} RON.`,
     `Veniturile actuale ale flotei sunt de ${Math.round(report.totals.totalRevenue)} RON, iar costurile actuale sunt de ${Math.round(report.totals.totalCost)} RON.`,
   ]
   const risks = [
     weakestCar
-      ? `${weakestCar.label} are cel mai slab scor, ${weakestCar.score}/100, si cere urmarire atenta a costurilor raportate la venituri.`
+      ? `${weakestCarReference} are cel mai slab scor, ${weakestCar.score}/100, si cere urmarire atenta a costurilor raportate la venituri.`
       : 'Nu exista suficiente date pentru a marca o masina cu risc clar.',
     report.totals.totalCost > report.totals.totalRevenue * 0.6
       ? 'Costurile actuale consuma o parte mare din veniturile flotei.'
@@ -419,8 +425,8 @@ export function buildFallbackFleetReportAiSummary(report: FleetReportSnapshot): 
       : 'Profitul ramane pozitiv, dar merita urmarite masinile cu scor slab.',
   ]
   const recommendations = [
-    strongestCar ? `Pastrati si promovati mai agresiv ${strongestCar.label}, pentru ca produce bine raportat la costuri.` : 'Pastrati masinile cu profit pozitiv si costuri bine controlate.',
-    weakestCar ? `Monitorizati atent ${weakestCar.label} in urmatoarele rapoarte; daca ramane jos, merita comparata cu o alternativa.` : 'Urmariti masinile cu scor sub 40 in rapoartele urmatoare.',
+    strongestCar ? `Pastrati si promovati mai agresiv ${strongestCarReference}, pentru ca produce bine raportat la costuri.` : 'Pastrati masinile cu profit pozitiv si costuri bine controlate.',
+    weakestCar ? `Monitorizati atent ${weakestCarReference} in urmatoarele rapoarte; daca ramane jos, merita comparata cu o alternativa.` : 'Urmariti masinile cu scor sub 40 in rapoartele urmatoare.',
     report.totals.totalCost > report.totals.totalRevenue * 0.6
       ? 'Verificati masinile la care costurile actuale cresc prea aproape de nivelul veniturilor actuale.'
       : 'Continuati sa urmariti masinile cu profit actual slab si comparati-le cu cele mai bune din flota.',
@@ -428,11 +434,11 @@ export function buildFallbackFleetReportAiSummary(report: FleetReportSnapshot): 
 
   const carCommentaries: FleetReportCarCommentary[] = getTopCommentaryCars(report).map((car) => ({
     carId: car.carId,
-    label: car.label,
+    label: getReportCarReference(car),
     summary:
       car.score >= 60
-        ? `${car.label} are un profil economic sanatos, cu venituri actuale de ${Math.round(car.revenue)} RON si profit actual de ${Math.round(car.profit)} RON.`
-        : `${car.label} are un scor modest, influentat de profitul slab din perioada si de costurile totale raportate la venituri.`,
+        ? `${getReportCarReference(car)} are un profil economic sanatos, cu venituri actuale de ${Math.round(car.revenue)} RON si profit actual de ${Math.round(car.profit)} RON.`
+        : `${getReportCarReference(car)} are un scor modest, influentat de profitul slab din perioada si de costurile totale raportate la venituri.`,
     action: car.score >= 60 ? 'keep' : car.score >= 40 ? 'monitor' : 'replace_candidate',
   }))
 

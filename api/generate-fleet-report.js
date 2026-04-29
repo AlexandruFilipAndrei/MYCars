@@ -383,7 +383,8 @@ function compactReport(report) {
     },
     cars: report.cars.map((car) => ({
       carId: compactText(car.carId, 80),
-      label: compactText(car.label, 160),
+      label: compactText(car.licensePlate || car.label, 80),
+      licensePlate: compactText(car.licensePlate, 40),
       status: compactText(car.status, 40),
       score: finiteNumber(car.score),
       verdict: compactText(car.verdict, 40),
@@ -627,6 +628,8 @@ export default async function handler(req, res) {
       'Raspunde exclusiv in limba romana.',
       'Nu inventa cifre sau fapte care nu exista in input.',
       'Toate sumele financiare din raport sunt in RON. Cand mentionezi bani, scrie lei sau RON, niciodata unitati.',
+      'Cand mentionezi o masina, foloseste numarul de inmatriculare din campul licensePlate/label, nu marca si modelul.',
+      'Pentru carCommentaries, campul label trebuie sa fie numarul de inmatriculare al masinii.',
       'Explica pe scurt ce masini produc bine, ce masini sunt sub asteptari si ce actiuni merita facute pentru a creste profitabilitatea flotei.',
       'Daca o masina are scor mic, leaga explicatia in primul rand de veniturile actuale, costurile actuale si profitul actual.',
       'Nu insista pe documente sau notificari; raportul trebuie sa ramana concentrat pe performanta economica.',
