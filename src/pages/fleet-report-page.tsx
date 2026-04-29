@@ -113,7 +113,7 @@ export function FleetReportPage() {
       toast.success(
         aiResult.status === 'success'
           ? 'Raportul a fost generat si salvat.'
-          : 'Raportul a fost salvat cu analiza locala, fara raspuns AI extern.',
+          : `Raportul a fost salvat cu analiza locala: ${aiResult.message}`,
       )
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Nu am putut genera raportul de flota.')
