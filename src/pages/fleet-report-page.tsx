@@ -543,7 +543,7 @@ function buildListHtml(title: string, items: string[]) {
   }
 
   return `
-    <section class="section">
+    <section class="section list-section">
       <h3>${escapeHtml(title)}</h3>
       <ul class="bullet-list">
         ${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
@@ -655,8 +655,16 @@ function buildReportPrintHtml(report: FleetReportRecord) {
           overflow-wrap: anywhere;
         }
         .section {
-          margin-top: 22px;
+          margin-top: 18px;
+        }
+        .summary-section,
+        .list-section {
           break-inside: avoid;
+          page-break-inside: avoid;
+        }
+        .table-section {
+          break-inside: auto;
+          page-break-inside: auto;
         }
         .section h2,
         .section h3 {
@@ -686,6 +694,15 @@ function buildReportPrintHtml(report: FleetReportRecord) {
           width: 100%;
           border-collapse: collapse;
           margin-top: 12px;
+          break-inside: auto;
+          page-break-inside: auto;
+        }
+        thead {
+          display: table-header-group;
+        }
+        tr {
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
         th, td {
           border-bottom: 1px solid var(--line);
@@ -773,7 +790,7 @@ function buildReportPrintHtml(report: FleetReportRecord) {
         ${
           summary
             ? `
-              <section class="section">
+              <section class="section summary-section">
                 <h2>${escapeHtml(summaryTitle)}</h2>
                 <div class="summary-block">
                   <p>${escapeHtml(summary.executiveSummary)}</p>
@@ -784,7 +801,7 @@ function buildReportPrintHtml(report: FleetReportRecord) {
               ${buildListHtml('Ce merita facut', summary.recommendations)}
             `
             : `
-              <section class="section">
+              <section class="section summary-section">
                 <h2>${escapeHtml(summaryTitle)}</h2>
                 <div class="summary-block">
                   <p>Rezumatul AI nu a fost generat pentru acest raport. Raportul economic ramane disponibil.</p>
@@ -793,7 +810,7 @@ function buildReportPrintHtml(report: FleetReportRecord) {
             `
         }
 
-        <section class="section">
+        <section class="section table-section">
           <h2>Masini analizate</h2>
           <table>
             <thead>
