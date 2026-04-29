@@ -2,6 +2,7 @@ const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const MAX_REPORT_CARS = 120
 const MAX_REPORT_OWNERS = 50
 const GEMINI_MAX_ATTEMPTS = 1
+const DEFAULT_DAILY_AI_REPORT_LIMIT = 20
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const responseSchema = {
@@ -93,6 +94,16 @@ function getBearerToken(req) {
   return match?.[1]?.trim() || null
 }
 
+function getDailyAiReportLimit() {
+  const parsedLimit = Number.parseInt(process.env.DAILY_AI_REPORT_LIMIT ?? '', 10)
+
+  if (!Number.isFinite(parsedLimit) || parsedLimit < 1) {
+    return DEFAULT_DAILY_AI_REPORT_LIMIT
+  }
+
+  return parsedLimit
+}
+
 function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -117,11 +128,11 @@ function getFriendlyGeminiErrorMessage(status, rawText) {
   const normalizedMessage = providerMessage.toLowerCase()
 
   if (status === 503 || normalizedMessage.includes('high demand') || normalizedMessage.includes('unavailable')) {
-    return 'Gemini este aglomerat temporar. Raportul a fost salvat cu analiza locala; incearca din nou mai tarziu pentru concluzii AI externe.'
+    return 'Gemini este aglomerat temporar; incearca din nou mai tarziu pentru concluzii AI externe.'
   }
 
   if (status === 429) {
-    return 'Limita Gemini a fost atinsa temporar. Raportul a fost salvat cu analiza locala; incearca din nou mai tarziu.'
+    return 'Limita Gemini a fost atinsa temporar; incearca din nou mai tarziu.'
   }
 
   return providerMessage || 'Gemini request failed.'
@@ -284,6 +295,48 @@ async function verifyReportFleetAccess(req, report) {
 
   if (hasOwnerMismatch) {
     return { ok: false, status: 403, message: 'Report contains invalid fleet ownership data.' }
+  }
+
+  return { ok: true }
+}
+
+async function reserveDailyAiReportAttempt(req) {
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
+  const token = getBearerToken(req)
+  const dailyLimit = getDailyAiReportLimit()
+
+  if (!supabaseUrl || !supabaseAnonKey || !token) {
+    return { ok: false, status: 503, message: 'AI usage limit storage is not configured.' }
+  }
+
+  const baseUrl = supabaseUrl.replace(/\/$/, '')
+  const reservationResponse = await fetch(`${baseUrl}/rest/v1/rpc/reserve_ai_report_usage_event`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      target_provider: 'gemini',
+      target_model: MODEL,
+      target_daily_limit: dailyLimit,
+    }),
+  })
+
+  if (!reservationResponse.ok) {
+    return { ok: false, status: 503, message: 'AI usage limit could not be checked.' }
+  }
+
+  const reservation = await reservationResponse.json()
+
+  if (!reservation?.ok) {
+    return {
+      ok: false,
+      status: 429,
+      message: compactText(reservation?.message, 240) || `Limita interna pentru rapoarte AI a fost atinsa azi (${dailyLimit}/zi).`,
+    }
   }
 
   return { ok: true }
@@ -556,6 +609,12 @@ export default async function handler(req, res) {
 
     if (!access.ok) {
       return res.status(access.status).json({ message: access.message })
+    }
+
+    const usageReservation = await reserveDailyAiReportAttempt(req)
+
+    if (!usageReservation.ok) {
+      return res.status(usageReservation.status).json({ message: usageReservation.message })
     }
 
     const prompt = [

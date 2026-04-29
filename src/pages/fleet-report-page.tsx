@@ -29,6 +29,28 @@ const periodOptions: Array<{ value: FleetReportPeriodKind; label: string }> = [
   { value: 'all', label: 'De la inceput' },
 ]
 
+function getFleetReportGenerationToastMessage(aiResult: Awaited<ReturnType<typeof generateFleetReportAiSummary>>) {
+  if (aiResult.status === 'success') {
+    return 'Raportul a fost generat cu succes.'
+  }
+
+  const normalizedMessage = aiResult.message.toLowerCase()
+
+  if (normalizedMessage.includes('modul demo')) {
+    return 'Raportul demo a fost generat cu analiza locala.'
+  }
+
+  if (normalizedMessage.includes('limita interna') || normalizedMessage.includes('limita gemini') || normalizedMessage.includes('limit')) {
+    return 'Limita pentru rapoarte AI a fost atinsa. Raportul a fost generat folosind analiza locala.'
+  }
+
+  if (normalizedMessage.includes('aglomerat') || normalizedMessage.includes('unavailable') || normalizedMessage.includes('temporar')) {
+    return 'Serviciul AI este indisponibil momentan. Raportul a fost generat folosind analiza locala.'
+  }
+
+  return 'Raportul a fost generat folosind analiza locala.'
+}
+
 export function FleetReportPage() {
   const { cars, rentals, maintenance, fleetReports, saveFleetReport, deleteFleetReport } = useAppStore()
   const { isDemo } = useAuthStore()
@@ -111,11 +133,7 @@ export function FleetReportPage() {
       })
 
       setActiveReportId(savedReport.id)
-      toast.success(
-        aiResult.status === 'success'
-          ? 'Raportul a fost generat si salvat.'
-          : `Raportul a fost salvat cu analiza locala: ${aiResult.message}`,
-      )
+      toast.success(getFleetReportGenerationToastMessage(aiResult))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Nu am putut genera raportul de flota.')
     } finally {
