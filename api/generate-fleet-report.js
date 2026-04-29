@@ -1,7 +1,7 @@
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const MAX_REPORT_CARS = 120
 const MAX_REPORT_OWNERS = 50
-const GEMINI_MAX_ATTEMPTS = 3
+const GEMINI_MAX_ATTEMPTS = 1
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const responseSchema = {
