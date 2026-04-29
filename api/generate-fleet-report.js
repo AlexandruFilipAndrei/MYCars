@@ -1,7 +1,7 @@
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const MAX_REPORT_CARS = 120
 const MAX_REPORT_OWNERS = 50
-const GEMINI_MAX_ATTEMPTS = 1
+const GEMINI_MAX_ATTEMPTS = getPositiveIntegerEnv('GEMINI_MAX_ATTEMPTS', 1)
 const DEFAULT_DAILY_AI_REPORT_LIMIT = 20
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -94,14 +94,18 @@ function getBearerToken(req) {
   return match?.[1]?.trim() || null
 }
 
-function getDailyAiReportLimit() {
-  const parsedLimit = Number.parseInt(process.env.DAILY_AI_REPORT_LIMIT ?? '', 10)
+function getPositiveIntegerEnv(name, fallback) {
+  const value = Number.parseInt(process.env[name] ?? '', 10)
 
-  if (!Number.isFinite(parsedLimit) || parsedLimit < 1) {
-    return DEFAULT_DAILY_AI_REPORT_LIMIT
+  if (!Number.isFinite(value) || value < 1) {
+    return fallback
   }
 
-  return parsedLimit
+  return value
+}
+
+function getDailyAiReportLimit() {
+  return getPositiveIntegerEnv('DAILY_AI_REPORT_LIMIT', DEFAULT_DAILY_AI_REPORT_LIMIT)
 }
 
 function sleep(ms) {
@@ -655,7 +659,7 @@ export default async function handler(req, res) {
       generationConfig: {
         responseMimeType: 'application/json',
         responseSchema,
-        temperature: 0.25,
+        temperature: 0,
         maxOutputTokens: 3200,
       },
     })
