@@ -379,6 +379,80 @@ function normalizeAiSummary(value) {
   }
 }
 
+function stripJsonCodeFence(value) {
+  const trimmedValue = value.trim()
+  const fencedMatch = trimmedValue.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  return fencedMatch?.[1]?.trim() ?? trimmedValue
+}
+
+function extractJsonObject(value) {
+  const trimmedValue = stripJsonCodeFence(value)
+  const firstBraceIndex = trimmedValue.indexOf('{')
+
+  if (firstBraceIndex === -1) {
+    return trimmedValue
+  }
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let index = firstBraceIndex; index < trimmedValue.length; index += 1) {
+    const character = trimmedValue[index]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (character === '\\' && inString) {
+      escaped = true
+      continue
+    }
+
+    if (character === '"') {
+      inString = !inString
+      continue
+    }
+
+    if (inString) {
+      continue
+    }
+
+    if (character === '{') {
+      depth += 1
+    }
+
+    if (character === '}') {
+      depth -= 1
+
+      if (depth === 0) {
+        return trimmedValue.slice(firstBraceIndex, index + 1)
+      }
+    }
+  }
+
+  return trimmedValue
+}
+
+function parseAiSummaryText(responseText) {
+  const candidates = [
+    responseText,
+    stripJsonCodeFence(responseText),
+    extractJsonObject(responseText),
+  ]
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate)
+    } catch {
+      // Try the next normalized representation.
+    }
+  }
+
+  throw new Error('Gemini returned invalid JSON.')
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -470,7 +544,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         provider: 'gemini',
         model: MODEL,
-        data: normalizeAiSummary(JSON.parse(responseText)),
+        data: normalizeAiSummary(parseAiSummaryText(responseText)),
       })
     } catch {
       return res.status(502).json({ message: 'Gemini returned invalid structured content.' })
