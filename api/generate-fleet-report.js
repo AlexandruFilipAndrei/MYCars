@@ -49,7 +49,6 @@ const responseSchema = {
           },
         },
         required: ['carId', 'label', 'summary', 'action'],
-        additionalProperties: false,
       },
     },
     generatedAt: {
@@ -58,7 +57,6 @@ const responseSchema = {
     },
   },
   required: ['executiveSummary', 'highlights', 'risks', 'recommendations', 'carCommentaries', 'generatedAt'],
-  additionalProperties: false,
 }
 
 function readRequestBody(req) {
