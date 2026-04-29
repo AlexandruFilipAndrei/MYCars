@@ -368,12 +368,19 @@ function normalizeAiSummary(value) {
         .filter((item) => item.carId && item.label && item.summary)
         .slice(0, 8)
     : []
+  const highlights = normalizeStringList(value.highlights, 4)
+  const risks = normalizeStringList(value.risks, 4)
+  const recommendations = normalizeStringList(value.recommendations, 4)
+
+  if (highlights.length === 0 || risks.length === 0 || recommendations.length === 0 || carCommentaries.length === 0) {
+    throw new Error('Gemini returned incomplete structured content.')
+  }
 
   return {
     executiveSummary,
-    highlights: normalizeStringList(value.highlights, 4),
-    risks: normalizeStringList(value.risks, 4),
-    recommendations: normalizeStringList(value.recommendations, 4),
+    highlights,
+    risks,
+    recommendations,
     carCommentaries,
     generatedAt: compactText(value.generatedAt, 40) || new Date().toISOString(),
   }
