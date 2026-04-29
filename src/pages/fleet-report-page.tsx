@@ -94,6 +94,7 @@ export function FleetReportPage() {
             message: 'Modul demo foloseste analiza locala.',
           }
         : await generateFleetReportAiSummary(snapshot)
+
       const aiSummary = aiResult.status === 'success' ? aiResult.summary : buildFallbackFleetReportAiSummary(snapshot)
       const savedReport = await saveFleetReport({
         periodKind,

@@ -1,4 +1,4 @@
-const MODEL = 'gemini-2.5-flash'
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const MAX_REPORT_CARS = 120
 const MAX_REPORT_OWNERS = 50
 const GEMINI_MAX_ATTEMPTS = 3
@@ -502,6 +502,12 @@ function extractJsonObject(value) {
   return trimmedValue
 }
 
+function normalizeJsonCandidate(value) {
+  return value
+    .trim()
+    .replace(/,\s*([}\]])/g, '$1')
+}
+
 function parseAiSummaryText(responseText) {
   const candidates = [
     responseText,
@@ -511,7 +517,7 @@ function parseAiSummaryText(responseText) {
 
   for (const candidate of candidates) {
     try {
-      return JSON.parse(candidate)
+      return JSON.parse(normalizeJsonCandidate(candidate))
     } catch {
       // Try the next normalized representation.
     }
@@ -561,6 +567,8 @@ export default async function handler(req, res) {
       'Nu insista pe documente sau notificari; raportul trebuie sa ramana concentrat pe performanta economica.',
       'Raportul este estimativ si trebuie sa ramana prudent, clar si util pentru un manager de flota.',
       'Returneaza obligatoriu toate campurile cerute: executiveSummary, 2-4 highlights, 2-4 risks, 2-4 recommendations, cel putin un carCommentary si generatedAt.',
+      'Returneaza exclusiv un obiect JSON valid. Nu folosi markdown, code fence, text introductiv sau explicatii in afara JSON.',
+      'Pastreaza fiecare observatie intr-o singura propozitie scurta.',
       '',
       'Snapshot raport:',
       JSON.stringify(compactReport(report)),
@@ -570,7 +578,7 @@ export default async function handler(req, res) {
       systemInstruction: {
         parts: [
           {
-            text: 'Analizezi rapoarte economice pentru flote auto. Folosesti doar datele primite si ramai concret.',
+            text: 'Analizezi rapoarte economice pentru flote auto. Folosesti doar datele primite, ramai concret si returnezi exclusiv JSON valid.',
           },
         ],
       },
@@ -587,7 +595,7 @@ export default async function handler(req, res) {
         responseMimeType: 'application/json',
         responseSchema,
         temperature: 0.25,
-        maxOutputTokens: 1800,
+        maxOutputTokens: 3200,
       },
     })
 
