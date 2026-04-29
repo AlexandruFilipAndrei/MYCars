@@ -343,12 +343,54 @@ function compactReport(report) {
   }
 }
 
+function getFirstDefinedValue(source, keys) {
+  if (!source || typeof source !== 'object') {
+    return undefined
+  }
+
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) {
+      return source[key]
+    }
+  }
+
+  return undefined
+}
+
 function normalizeStringList(value, maxItems) {
   if (!Array.isArray(value)) {
     return []
   }
 
-  return value.map((item) => compactText(item, 420)).filter(Boolean).slice(0, maxItems)
+  return value
+    .map((item) =>
+      compactText(
+        typeof item === 'string'
+          ? item
+          : getFirstDefinedValue(item, ['text', 'summary', 'description', 'content', 'value', 'point']),
+        420,
+      ),
+    )
+    .filter(Boolean)
+    .slice(0, maxItems)
+}
+
+function normalizeAiAction(value) {
+  const action = compactText(value, 40).toLowerCase()
+
+  if (action === 'keep' || action === 'monitor' || action === 'replace_candidate') {
+    return action
+  }
+
+  if (action.includes('replace') || action.includes('inloc')) {
+    return 'replace_candidate'
+  }
+
+  if (action.includes('keep') || action.includes('pastr')) {
+    return 'keep'
+  }
+
+  return 'monitor'
 }
 
 function normalizeAiSummary(value) {
@@ -356,30 +398,42 @@ function normalizeAiSummary(value) {
     throw new Error('Gemini returned invalid JSON structure.')
   }
 
-  const executiveSummary = compactText(value.executiveSummary, 1200)
+  const executiveSummary = compactText(
+    getFirstDefinedValue(value, ['executiveSummary', 'executive_summary', 'summary', 'rezumatExecutiv', 'rezumat']),
+    1200,
+  )
 
   if (!executiveSummary) {
     throw new Error('Gemini returned an empty executive summary.')
   }
 
-  const allowedActions = new Set(['keep', 'monitor', 'replace_candidate'])
-  const carCommentaries = Array.isArray(value.carCommentaries)
-    ? value.carCommentaries
+  const rawCarCommentaries = getFirstDefinedValue(value, ['carCommentaries', 'car_commentaries', 'vehicleCommentaries', 'cars', 'masini'])
+  const carCommentaries = Array.isArray(rawCarCommentaries)
+    ? rawCarCommentaries
         .map((item) => ({
-          carId: compactText(item?.carId, 80),
-          label: compactText(item?.label, 160),
-          summary: compactText(item?.summary, 600),
-          action: allowedActions.has(item?.action) ? item.action : 'monitor',
+          carId: compactText(getFirstDefinedValue(item, ['carId', 'car_id', 'vehicleId', 'id']), 80),
+          label: compactText(getFirstDefinedValue(item, ['label', 'name', 'car', 'masina']), 160),
+          summary: compactText(getFirstDefinedValue(item, ['summary', 'commentary', 'comment', 'analysis', 'text']), 600),
+          action: normalizeAiAction(getFirstDefinedValue(item, ['action', 'recommendedAction', 'recommendation'])),
         }))
         .filter((item) => item.carId && item.label && item.summary)
         .slice(0, 8)
     : []
-  const highlights = normalizeStringList(value.highlights, 4)
-  const risks = normalizeStringList(value.risks, 4)
-  const recommendations = normalizeStringList(value.recommendations, 4)
+  const highlights = normalizeStringList(getFirstDefinedValue(value, ['highlights', 'strengths', 'puncteForte', 'puncte_forte']), 4)
+  const risks = normalizeStringList(getFirstDefinedValue(value, ['risks', 'weaknesses', 'puncteSlabe', 'puncte_slabe']), 4)
+  const recommendations = normalizeStringList(
+    getFirstDefinedValue(value, ['recommendations', 'actions', 'nextSteps', 'ceMeritaFacut', 'ce_merita_facut']),
+    4,
+  )
 
-  if (highlights.length === 0 || risks.length === 0 || recommendations.length === 0 || carCommentaries.length === 0) {
-    throw new Error('Gemini returned incomplete structured content.')
+  const missingSections = [
+    highlights.length === 0 ? 'highlights' : null,
+    risks.length === 0 ? 'risks' : null,
+    recommendations.length === 0 ? 'recommendations' : null,
+  ].filter(Boolean)
+
+  if (missingSections.length > 0) {
+    throw new Error(`Gemini returned incomplete structured content. Missing: ${missingSections.join(', ')}.`)
   }
 
   return {
@@ -388,7 +442,7 @@ function normalizeAiSummary(value) {
     risks,
     recommendations,
     carCommentaries,
-    generatedAt: compactText(value.generatedAt, 40) || new Date().toISOString(),
+    generatedAt: compactText(getFirstDefinedValue(value, ['generatedAt', 'generated_at']), 40) || new Date().toISOString(),
   }
 }
 
@@ -560,8 +614,9 @@ export default async function handler(req, res) {
         model: MODEL,
         data: normalizeAiSummary(parseAiSummaryText(responseText)),
       })
-    } catch {
-      return res.status(502).json({ message: 'Gemini returned invalid structured content.' })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Gemini returned invalid structured content.'
+      return res.status(502).json({ message })
     }
   } catch (error) {
     return res.status(500).json({
