@@ -354,10 +354,10 @@ function ReportSummary({
   onPrint: (report: FleetReportRecord) => void
 }) {
   const summaryCards = [
-    { label: 'Scor economic', value: `${report.report.overallScore}/100` },
-    { label: 'Profit actual', value: formatCurrency(report.report.totals.totalProfit) },
-    { label: 'Venituri actuale', value: formatCurrency(report.report.totals.totalRevenue) },
-    { label: 'Costuri actuale', value: formatCurrency(report.report.totals.totalCost) },
+    { label: 'Scor economic', value: `${report.report.overallScore}/100`, kind: 'score' },
+    { label: 'Profit actual', value: formatCurrency(report.report.totals.totalProfit), kind: 'money' },
+    { label: 'Venituri actuale', value: formatCurrency(report.report.totals.totalRevenue), kind: 'money' },
+    { label: 'Costuri actuale', value: formatCurrency(report.report.totals.totalCost), kind: 'money' },
   ]
 
   return (
@@ -383,12 +383,20 @@ function ReportSummary({
         </CardHeader>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[190px_repeat(3,minmax(0,1fr))]">
         {summaryCards.map((card) => (
           <Card key={card.label}>
             <CardContent className="min-w-0 p-5">
               <p className="text-sm text-muted-foreground">{card.label}</p>
-              <p className="mt-2 break-words font-display text-2xl font-bold leading-tight tabular-nums 2xl:text-3xl">{card.value}</p>
+              <p
+                className={
+                  card.kind === 'score'
+                    ? 'mt-2 font-display text-3xl font-bold leading-tight tabular-nums'
+                    : 'mt-2 break-words font-display text-2xl font-bold leading-tight tabular-nums xl:whitespace-nowrap xl:text-[1.65rem] 2xl:text-[1.75rem]'
+                }
+              >
+                {card.value}
+              </p>
             </CardContent>
           </Card>
         ))}
