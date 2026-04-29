@@ -1,6 +1,7 @@
 const MODEL = 'gemini-2.5-flash'
 const MAX_REPORT_CARS = 120
 const MAX_REPORT_OWNERS = 50
+const GEMINI_MAX_ATTEMPTS = 3
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const responseSchema = {
@@ -84,6 +85,64 @@ function getBearerToken(req) {
 
   const match = header.match(/^Bearer\s+(.+)$/i)
   return match?.[1]?.trim() || null
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+function isTransientGeminiStatus(status) {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+}
+
+function getProviderErrorMessage(rawText) {
+  try {
+    const parsed = JSON.parse(rawText)
+    return parsed?.error?.message || parsed?.message || rawText
+  } catch {
+    return rawText
+  }
+}
+
+function getFriendlyGeminiErrorMessage(status, rawText) {
+  const providerMessage = compactText(getProviderErrorMessage(rawText), 700)
+  const normalizedMessage = providerMessage.toLowerCase()
+
+  if (status === 503 || normalizedMessage.includes('high demand') || normalizedMessage.includes('unavailable')) {
+    return 'Gemini este aglomerat temporar. Raportul a fost salvat cu analiza locala; incearca din nou mai tarziu pentru concluzii AI externe.'
+  }
+
+  if (status === 429) {
+    return 'Limita Gemini a fost atinsa temporar. Raportul a fost salvat cu analiza locala; incearca din nou mai tarziu.'
+  }
+
+  return providerMessage || 'Gemini request failed.'
+}
+
+async function generateGeminiContent(apiKey, requestBody) {
+  let lastResponse = null
+
+  for (let attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt += 1) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify(requestBody),
+    })
+
+    if (response.ok || !isTransientGeminiStatus(response.status) || attempt === GEMINI_MAX_ATTEMPTS) {
+      return response
+    }
+
+    lastResponse = response
+    await sleep(700 * attempt)
+  }
+
+  return lastResponse
 }
 
 async function verifySupabaseUser(req) {
@@ -365,41 +424,36 @@ export default async function handler(req, res) {
       JSON.stringify(compactReport(report)),
     ].join('\n')
 
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
+    const geminiResponse = await generateGeminiContent(apiKey, {
+      system_instruction: {
+        parts: [
+          {
+            text: 'Analizezi rapoarte economice pentru flote auto. Folosesti doar datele primite si ramai concret.',
+          },
+        ],
       },
-      body: JSON.stringify({
-        system_instruction: {
+      contents: [
+        {
           parts: [
             {
-              text: 'Analizezi rapoarte economice pentru flote auto. Folosesti doar datele primite si ramai concret.',
+              text: prompt,
             },
           ],
         },
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseJsonSchema: responseSchema,
-          temperature: 0.25,
-          maxOutputTokens: 1800,
-        },
-      }),
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseJsonSchema: responseSchema,
+        temperature: 0.25,
+        maxOutputTokens: 1800,
+      },
     })
 
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text()
-      return res.status(502).json({ message: errorText || 'Gemini request failed.' })
+      return res.status(geminiResponse.status).json({
+        message: getFriendlyGeminiErrorMessage(geminiResponse.status, errorText),
+      })
     }
 
     const payload = await geminiResponse.json()
