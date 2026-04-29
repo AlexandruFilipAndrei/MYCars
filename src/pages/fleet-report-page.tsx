@@ -191,7 +191,7 @@ export function FleetReportPage() {
         action={
           <Button onClick={() => void handleGenerateReport()} disabled={isGenerating || visibleCars.length === 0}>
             {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {isGenerating ? 'Se genereaza...' : 'Genereaza raport AI'}
+            {isGenerating ? 'Se genereaza...' : isDemo ? 'Genereaza raport' : 'Genereaza raport AI'}
           </Button>
         }
       />
@@ -243,7 +243,7 @@ export function FleetReportPage() {
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-6">
             <ReportSummary report={activeReport} onPrint={handlePrintPdf} />
-            <AiSummarySection summary={activeReport.report.aiSummary} />
+            <AiSummarySection summary={activeReport.report.aiSummary} aiProvider={activeReport.aiProvider} />
             <CarsSection report={activeReport.report} />
           </div>
 
@@ -378,12 +378,18 @@ function ReportSummary({
   )
 }
 
-function AiSummarySection({ summary }: { summary?: FleetReportAiSummary }) {
+function getAiSummaryTitle(aiProvider?: string) {
+  return aiProvider === 'local' ? 'Analiza locala' : 'Concluzii AI'
+}
+
+function AiSummarySection({ summary, aiProvider }: { summary?: FleetReportAiSummary; aiProvider?: string }) {
+  const title = getAiSummaryTitle(aiProvider)
+
   if (!summary) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Concluzii AI</CardTitle>
+          <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent className="p-5">
           <div className="flex items-start gap-3 rounded-2xl bg-muted p-4 text-sm">
@@ -398,7 +404,7 @@ function AiSummarySection({ summary }: { summary?: FleetReportAiSummary }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Concluzii AI</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5 p-5">
         <p className="text-sm leading-7 text-foreground">{summary.executiveSummary}</p>
@@ -528,6 +534,7 @@ function buildReportPrintHtml(report: FleetReportRecord) {
   ]
 
   const summary = snapshot.aiSummary
+  const summaryTitle = getAiSummaryTitle(report.aiProvider)
 
   return `<!DOCTYPE html>
   <html lang="ro">
@@ -733,7 +740,7 @@ function buildReportPrintHtml(report: FleetReportRecord) {
           summary
             ? `
               <section class="section">
-                <h2>Concluzii AI</h2>
+                <h2>${escapeHtml(summaryTitle)}</h2>
                 <div class="summary-block">
                   <p>${escapeHtml(summary.executiveSummary)}</p>
                 </div>
@@ -744,7 +751,7 @@ function buildReportPrintHtml(report: FleetReportRecord) {
             `
             : `
               <section class="section">
-                <h2>Concluzii AI</h2>
+                <h2>${escapeHtml(summaryTitle)}</h2>
                 <div class="summary-block">
                   <p>Rezumatul AI nu a fost generat pentru acest raport. Raportul economic ramane disponibil.</p>
                 </div>

@@ -14,21 +14,29 @@ const responseSchema = {
     highlights: {
       type: 'array',
       description: '2-4 observatii pozitive despre performanta flotei.',
+      minItems: 2,
+      maxItems: 4,
       items: { type: 'string' },
     },
     risks: {
       type: 'array',
       description: '2-4 riscuri sau probleme care cer atentie.',
+      minItems: 2,
+      maxItems: 4,
       items: { type: 'string' },
     },
     recommendations: {
       type: 'array',
       description: '2-4 recomandari practice, in limba romana.',
+      minItems: 2,
+      maxItems: 4,
       items: { type: 'string' },
     },
     carCommentaries: {
       type: 'array',
       description: 'Comentarii scurte pentru masinile cele mai importante din raport.',
+      minItems: 1,
+      maxItems: 8,
       items: {
         type: 'object',
         properties: {
@@ -500,13 +508,14 @@ export default async function handler(req, res) {
       'Daca o masina are scor mic, leaga explicatia in primul rand de veniturile actuale, costurile actuale si profitul actual.',
       'Nu insista pe documente sau notificari; raportul trebuie sa ramana concentrat pe performanta economica.',
       'Raportul este estimativ si trebuie sa ramana prudent, clar si util pentru un manager de flota.',
+      'Returneaza obligatoriu toate campurile cerute: executiveSummary, 2-4 highlights, 2-4 risks, 2-4 recommendations, cel putin un carCommentary si generatedAt.',
       '',
       'Snapshot raport:',
       JSON.stringify(compactReport(report)),
     ].join('\n')
 
     const geminiResponse = await generateGeminiContent(apiKey, {
-      system_instruction: {
+      systemInstruction: {
         parts: [
           {
             text: 'Analizezi rapoarte economice pentru flote auto. Folosesti doar datele primite si ramai concret.',
@@ -524,7 +533,7 @@ export default async function handler(req, res) {
       ],
       generationConfig: {
         responseMimeType: 'application/json',
-        responseJsonSchema: responseSchema,
+        responseSchema,
         temperature: 0.25,
         maxOutputTokens: 1800,
       },
