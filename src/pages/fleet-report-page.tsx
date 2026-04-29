@@ -19,6 +19,7 @@ import {
 } from '@/lib/fleet-report'
 import { formatCurrency, formatDate, getStatusBadgeVariant, getStatusLabel } from '@/lib/format'
 import { useAppStore } from '@/store/app-store'
+import { useAuthStore } from '@/store/auth-store'
 import type { FleetReportAiSummary, FleetReportPeriodKind, FleetReportRecord, FleetReportSnapshot } from '@/types/models'
 
 const periodOptions: Array<{ value: FleetReportPeriodKind; label: string }> = [
@@ -30,6 +31,7 @@ const periodOptions: Array<{ value: FleetReportPeriodKind; label: string }> = [
 
 export function FleetReportPage() {
   const { cars, rentals, maintenance, fleetReports, saveFleetReport, deleteFleetReport } = useAppStore()
+  const { isDemo } = useAuthStore()
   const { matchesOwner, selectedOwnerIds, getFleetOwnerName } = useFleetFilter()
   const [periodKind, setPeriodKind] = useState<FleetReportPeriodKind>('365d')
   const [activeReportId, setActiveReportId] = useState<string | null>(null)
@@ -86,7 +88,12 @@ export function FleetReportPage() {
         selectedOwnerIds: normalizedSelectedOwnerIds,
         periodKind,
       })
-      const aiResult = await generateFleetReportAiSummary(snapshot)
+      const aiResult = isDemo
+        ? {
+            status: 'unavailable' as const,
+            message: 'Modul demo foloseste analiza locala.',
+          }
+        : await generateFleetReportAiSummary(snapshot)
       const aiSummary = aiResult.status === 'success' ? aiResult.summary : buildFallbackFleetReportAiSummary(snapshot)
       const savedReport = await saveFleetReport({
         periodKind,

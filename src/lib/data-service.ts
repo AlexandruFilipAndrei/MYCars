@@ -1996,38 +1996,36 @@ export const dataService = {
       updated_at: new Date().toISOString(),
     }
 
-    const rentalQuery = input.id
-      ? table('rentals').update(rentalPayload).eq('id', input.id).select().single()
-      : table('rentals').insert(rentalPayload).select().single()
-
-    const { data, error } = await rentalQuery
-    if (error) {
-      throw new Error(error.message)
-    }
-
-    const rentalId = (data as RemoteRentalRow).id
-
-    if (input.id) {
-      const deleteSegments = await table('rental_price_segments').delete().eq('rental_id', rentalId)
-      if (deleteSegments.error) {
-        throw new Error(deleteSegments.error.message)
-      }
-    }
-
-    if (input.segments.length > 0) {
-      const { error: segmentsError } = await table('rental_price_segments').insert(
-        input.segments.map((segment) => ({
-          rental_id: rentalId,
+    const { data, error } = await supabase.rpc(
+      'save_rental_with_segments' as never,
+      {
+        target_id: input.id ?? null,
+        target_car_id: rentalPayload.car_id,
+        target_renter_name: rentalPayload.renter_name,
+        target_renter_surname: rentalPayload.renter_surname,
+        target_renter_cnp: rentalPayload.renter_cnp,
+        target_renter_id_photo_url: rentalPayload.renter_id_photo_url,
+        target_start_date: rentalPayload.start_date,
+        target_end_date: rentalPayload.end_date,
+        target_advance_payment: rentalPayload.advance_payment,
+        target_status: rentalPayload.status,
+        target_notes: rentalPayload.notes,
+        target_km_start: rentalPayload.km_start,
+        target_km_end: rentalPayload.km_end,
+        target_segments: input.segments.map((segment) => ({
           price_per_unit: segment.pricePerUnit,
           price_unit: segment.priceUnit,
           start_date: segment.startDate,
           end_date: segment.endDate,
         })),
-      )
-      if (segmentsError) {
-        throw new Error(segmentsError.message)
-      }
+      } as never,
+    )
+
+    if (error) {
+      throw new Error(error.message)
     }
+
+    const savedRental = data as RemoteRentalRow
 
     await refreshRemoteCarStatus(input.carId)
 
@@ -2035,7 +2033,7 @@ export const dataService = {
       await refreshRemoteCarStatus(previousCarId)
     }
 
-    return mapRental(data as RemoteRentalRow, input.segments)
+    return mapRental(savedRental, input.segments)
   },
 
   async deleteRental(user: AppUser, id: string) {

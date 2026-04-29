@@ -1,5 +1,7 @@
 const MODEL = 'gemini-2.5-flash'
 const MAX_REPORT_CARS = 120
+const MAX_REPORT_OWNERS = 50
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const responseSchema = {
   type: 'object',
@@ -129,8 +131,97 @@ function isValidReportPayload(report) {
       typeof report.totals === 'object' &&
       Array.isArray(report.cars) &&
       report.cars.length > 0 &&
-      report.cars.length <= MAX_REPORT_CARS,
+      report.cars.length <= MAX_REPORT_CARS &&
+      report.selectedOwnerIds.length > 0 &&
+      report.selectedOwnerIds.length <= MAX_REPORT_OWNERS &&
+      report.selectedOwnerIds.every((ownerId) => typeof ownerId === 'string') &&
+      report.cars.every((car) => typeof car?.carId === 'string' && typeof car?.ownerId === 'string'),
   )
+}
+
+function getUniqueStrings(values) {
+  return Array.from(new Set(values.filter((value) => typeof value === 'string' && value.trim()).map((value) => value.trim())))
+}
+
+async function verifyReportFleetAccess(req, report) {
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
+  const token = getBearerToken(req)
+  const selectedOwnerIds = getUniqueStrings(report.selectedOwnerIds)
+  const reportCars = report.cars.map((car) => ({
+    carId: car.carId.trim(),
+    ownerId: car.ownerId.trim(),
+  }))
+  const carIds = getUniqueStrings(reportCars.map((car) => car.carId))
+
+  if (!supabaseUrl || !supabaseAnonKey || !token) {
+    return { ok: false, status: 503, message: 'Supabase access validation is not configured for AI reports.' }
+  }
+
+  if (
+    selectedOwnerIds.length !== report.selectedOwnerIds.length ||
+    carIds.length !== report.cars.length ||
+    !selectedOwnerIds.every((id) => UUID_PATTERN.test(id)) ||
+    !reportCars.every((car) => UUID_PATTERN.test(car.carId) && UUID_PATTERN.test(car.ownerId))
+  ) {
+    return { ok: false, status: 400, message: 'Invalid report fleet identifiers.' }
+  }
+
+  const selectedOwnerSet = new Set(selectedOwnerIds)
+  const requestedCarOwnerById = new Map(reportCars.map((car) => [car.carId, car.ownerId]))
+
+  if (!reportCars.every((car) => selectedOwnerSet.has(car.ownerId))) {
+    return { ok: false, status: 403, message: 'Report contains cars outside the selected fleets.' }
+  }
+
+  const baseUrl = supabaseUrl.replace(/\/$/, '')
+  const profilesResponse = await fetch(
+    `${baseUrl}/rest/v1/profiles?select=id&id=in.(${selectedOwnerIds.join(',')})`,
+    {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  )
+
+  if (!profilesResponse.ok) {
+    return { ok: false, status: 502, message: 'Could not validate report fleet access.' }
+  }
+
+  const accessibleProfiles = await profilesResponse.json()
+
+  if (!Array.isArray(accessibleProfiles) || accessibleProfiles.length !== selectedOwnerIds.length) {
+    return { ok: false, status: 403, message: 'Report contains fleets that are not accessible to the current user.' }
+  }
+
+  const carsResponse = await fetch(
+    `${baseUrl}/rest/v1/cars?select=id,owner_id&id=in.(${carIds.join(',')})`,
+    {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  )
+
+  if (!carsResponse.ok) {
+    return { ok: false, status: 502, message: 'Could not validate report fleet access.' }
+  }
+
+  const accessibleCars = await carsResponse.json()
+
+  if (!Array.isArray(accessibleCars) || accessibleCars.length !== carIds.length) {
+    return { ok: false, status: 403, message: 'Report contains cars that are not accessible to the current user.' }
+  }
+
+  const hasOwnerMismatch = accessibleCars.some((car) => requestedCarOwnerById.get(car.id) !== car.owner_id)
+
+  if (hasOwnerMismatch) {
+    return { ok: false, status: 403, message: 'Report contains invalid fleet ownership data.' }
+  }
+
+  return { ok: true }
 }
 
 function finiteNumber(value) {
@@ -253,6 +344,12 @@ export default async function handler(req, res) {
 
     if (!isValidReportPayload(report)) {
       return res.status(400).json({ message: 'Invalid report payload.' })
+    }
+
+    const access = await verifyReportFleetAccess(req, report)
+
+    if (!access.ok) {
+      return res.status(access.status).json({ message: access.message })
     }
 
     const prompt = [

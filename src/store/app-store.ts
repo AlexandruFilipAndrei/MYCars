@@ -29,7 +29,7 @@ type PersistedAppData = {
   incomingInvites: FleetAccess[]
 }
 
-const appCacheVersion = 2
+const appCacheVersion = 3
 const appCacheMaxAgeMs = 1000 * 60 * 60 * 4
 
 function createEmptyState(isLoading: boolean) {
@@ -61,13 +61,21 @@ function clearPersistedAppData(userId: string) {
   }
 }
 
+function sanitizeRentalForPersistence(rental: Rental): Rental {
+  return {
+    ...rental,
+    renterCnp: '',
+    renterIdPhotoUrl: undefined,
+  }
+}
+
 function pickPersistedAppData(source: PersistedAppData): PersistedAppData {
   return {
     profile: source.profile,
     cars: source.cars,
     carPhotos: source.carPhotos,
     documents: source.documents,
-    rentals: source.rentals,
+    rentals: source.rentals.map(sanitizeRentalForPersistence),
     maintenance: source.maintenance,
     fleetReports: source.fleetReports,
     notifications: source.notifications,
