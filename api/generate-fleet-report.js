@@ -1,8 +1,10 @@
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-pro'
+const MODEL = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
+const DEFAULT_GEMINI_FALLBACK_MODELS = 'gemini-2.5-flash,gemini-2.5-flash-lite'
 const MAX_REPORT_CARS = 120
 const MAX_REPORT_OWNERS = 50
 const GEMINI_MAX_ATTEMPTS = getPositiveIntegerEnv('GEMINI_MAX_ATTEMPTS', 1)
-const DEFAULT_DAILY_AI_REPORT_LIMIT = 20
+const DEFAULT_DAILY_AI_REPORT_LIMIT = 10
 const FLEET_REPORT_SCORING_VERSION = 'fleet-report-v1'
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -107,6 +109,16 @@ function getPositiveIntegerEnv(name, fallback) {
   return value
 }
 
+function getConfiguredGeminiModels() {
+  return Array.from(
+    new Set(
+      [MODEL, ...(process.env.GEMINI_FALLBACK_MODELS ?? DEFAULT_GEMINI_FALLBACK_MODELS).split(',')]
+        .map((model) => compactText(model, 80))
+        .filter(Boolean),
+    ),
+  )
+}
+
 function getDailyAiReportLimit() {
   return getPositiveIntegerEnv('DAILY_AI_REPORT_LIMIT', DEFAULT_DAILY_AI_REPORT_LIMIT)
 }
@@ -145,17 +157,29 @@ function getFriendlyGeminiErrorMessage(status, rawText) {
   return providerMessage || 'Gemini request failed.'
 }
 
-async function generateGeminiContent(apiKey, requestBody) {
+function getGeminiGenerationConfig(model) {
+  return {
+    responseMimeType: 'application/json',
+    responseSchema,
+    temperature: model.startsWith('gemini-3') ? 1 : 0,
+    maxOutputTokens: 3200,
+  }
+}
+
+async function generateGeminiContent(apiKey, model, requestBody) {
   let lastResponse = null
 
   for (let attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt += 1) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey,
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({
+        ...requestBody,
+        generationConfig: getGeminiGenerationConfig(model),
+      }),
     })
 
     if (response.ok || !isTransientGeminiStatus(response.status) || attempt === GEMINI_MAX_ATTEMPTS) {
@@ -167,6 +191,57 @@ async function generateGeminiContent(apiKey, requestBody) {
   }
 
   return lastResponse
+}
+
+async function generateAiSummary(apiKey, requestBody) {
+  let lastError = { status: 502, message: 'Gemini returned no usable content.' }
+
+  for (const model of getConfiguredGeminiModels()) {
+    const geminiResponse = await generateGeminiContent(apiKey, model, requestBody)
+
+    if (!geminiResponse?.ok) {
+      const status = geminiResponse?.status ?? 502
+      const errorText = geminiResponse ? await geminiResponse.text() : ''
+
+      lastError = {
+        status,
+        message: getFriendlyGeminiErrorMessage(status, errorText),
+      }
+
+      if (status >= 400 && status < 500 && status !== 429) {
+        break
+      }
+
+      continue
+    }
+
+    const payload = await geminiResponse.json()
+    const responseText = getResponseText(payload)
+
+    if (!responseText) {
+      lastError = {
+        status: 502,
+        message: 'Gemini returned no usable content.',
+        promptFeedback: payload?.promptFeedback ?? null,
+      }
+      continue
+    }
+
+    try {
+      return {
+        ok: true,
+        model,
+        data: normalizeAiSummary(parseAiSummaryText(responseText)),
+      }
+    } catch (error) {
+      lastError = {
+        status: 502,
+        message: error instanceof Error ? error.message : 'Gemini returned invalid structured content.',
+      }
+    }
+  }
+
+  return { ok: false, ...lastError }
 }
 
 async function verifySupabaseUser(req) {
@@ -230,7 +305,7 @@ function getUniqueStrings(values) {
   return Array.from(new Set(values.filter((value) => typeof value === 'string' && value.trim()).map((value) => value.trim())))
 }
 
-async function reserveDailyAiReportAttempt(req) {
+async function reserveDailyAiReportAttempt(req, targetModel) {
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
   const token = getBearerToken(req)
@@ -250,7 +325,7 @@ async function reserveDailyAiReportAttempt(req) {
     },
     body: JSON.stringify({
       target_provider: 'gemini',
-      target_model: MODEL,
+      target_model: targetModel,
       target_daily_limit: dailyLimit,
     }),
   })
@@ -1016,7 +1091,8 @@ export default async function handler(req, res) {
 
     const serverReport = buildServerFleetReportSnapshot(report, reportData.data)
 
-    const usageReservation = await reserveDailyAiReportAttempt(req)
+    const configuredModels = getConfiguredGeminiModels()
+    const usageReservation = await reserveDailyAiReportAttempt(req, configuredModels.join(','))
 
     if (!usageReservation.ok) {
       return res.status(usageReservation.status).json({ message: usageReservation.message })
@@ -1041,7 +1117,7 @@ export default async function handler(req, res) {
       JSON.stringify(compactReport(serverReport)),
     ].join('\n')
 
-    const geminiResponse = await generateGeminiContent(apiKey, {
+    const aiSummary = await generateAiSummary(apiKey, {
       systemInstruction: {
         parts: [
           {
@@ -1058,42 +1134,22 @@ export default async function handler(req, res) {
           ],
         },
       ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema,
-        temperature: 0,
-        maxOutputTokens: 3200,
-      },
     })
 
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text()
-      return res.status(geminiResponse.status).json({
-        message: getFriendlyGeminiErrorMessage(geminiResponse.status, errorText),
+    if (!aiSummary.ok) {
+      return res.status(aiSummary.status).json({
+        message: aiSummary.message,
+        promptFeedback: aiSummary.promptFeedback ?? null,
       })
     }
 
-    const payload = await geminiResponse.json()
-    const responseText = getResponseText(payload)
-
-    if (!responseText) {
-      return res.status(502).json({
-        message: 'Gemini returned no usable content.',
-        promptFeedback: payload?.promptFeedback ?? null,
-      })
-    }
-
-    try {
-      return res.status(200).json({
-        provider: 'gemini',
-        model: MODEL,
-        report: serverReport,
-        data: normalizeAiSummary(parseAiSummaryText(responseText)),
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Gemini returned invalid structured content.'
-      return res.status(502).json({ message })
-    }
+    return res.status(200).json({
+      provider: 'gemini',
+      model: aiSummary.model,
+      attemptedModels: configuredModels,
+      report: serverReport,
+      data: aiSummary.data,
+    })
   } catch (error) {
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Unexpected AI generation error.',
