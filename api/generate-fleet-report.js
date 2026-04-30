@@ -3,7 +3,10 @@ const MAX_REPORT_CARS = 120
 const MAX_REPORT_OWNERS = 50
 const GEMINI_MAX_ATTEMPTS = getPositiveIntegerEnv('GEMINI_MAX_ATTEMPTS', 1)
 const DEFAULT_DAILY_AI_REPORT_LIMIT = 20
+const FLEET_REPORT_SCORING_VERSION = 'fleet-report-v1'
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const VALID_PERIOD_KINDS = new Set(['90d', '180d', '365d', 'all'])
 
 const responseSchema = {
   type: 'object',
@@ -206,6 +209,10 @@ function isValidReportPayload(report) {
       typeof report.generatedAt === 'string' &&
       typeof report.periodStart === 'string' &&
       typeof report.periodEnd === 'string' &&
+      DATE_PATTERN.test(report.periodStart) &&
+      DATE_PATTERN.test(report.periodEnd) &&
+      report.periodStart <= report.periodEnd &&
+      VALID_PERIOD_KINDS.has(report.periodKind) &&
       Array.isArray(report.selectedOwnerIds) &&
       report.totals &&
       typeof report.totals === 'object' &&
@@ -221,87 +228,6 @@ function isValidReportPayload(report) {
 
 function getUniqueStrings(values) {
   return Array.from(new Set(values.filter((value) => typeof value === 'string' && value.trim()).map((value) => value.trim())))
-}
-
-async function verifyReportFleetAccess(req, report) {
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
-  const token = getBearerToken(req)
-  const selectedOwnerIds = getUniqueStrings(report.selectedOwnerIds)
-  const reportCars = report.cars.map((car) => ({
-    carId: car.carId.trim(),
-    ownerId: car.ownerId.trim(),
-  }))
-  const carIds = getUniqueStrings(reportCars.map((car) => car.carId))
-
-  if (!supabaseUrl || !supabaseAnonKey || !token) {
-    return { ok: false, status: 503, message: 'Supabase access validation is not configured for AI reports.' }
-  }
-
-  if (
-    selectedOwnerIds.length !== report.selectedOwnerIds.length ||
-    carIds.length !== report.cars.length ||
-    !selectedOwnerIds.every((id) => UUID_PATTERN.test(id)) ||
-    !reportCars.every((car) => UUID_PATTERN.test(car.carId) && UUID_PATTERN.test(car.ownerId))
-  ) {
-    return { ok: false, status: 400, message: 'Invalid report fleet identifiers.' }
-  }
-
-  const selectedOwnerSet = new Set(selectedOwnerIds)
-  const requestedCarOwnerById = new Map(reportCars.map((car) => [car.carId, car.ownerId]))
-
-  if (!reportCars.every((car) => selectedOwnerSet.has(car.ownerId))) {
-    return { ok: false, status: 403, message: 'Report contains cars outside the selected fleets.' }
-  }
-
-  const baseUrl = supabaseUrl.replace(/\/$/, '')
-  const profilesResponse = await fetch(
-    `${baseUrl}/rest/v1/profiles?select=id&id=in.(${selectedOwnerIds.join(',')})`,
-    {
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  )
-
-  if (!profilesResponse.ok) {
-    return { ok: false, status: 502, message: 'Could not validate report fleet access.' }
-  }
-
-  const accessibleProfiles = await profilesResponse.json()
-
-  if (!Array.isArray(accessibleProfiles) || accessibleProfiles.length !== selectedOwnerIds.length) {
-    return { ok: false, status: 403, message: 'Report contains fleets that are not accessible to the current user.' }
-  }
-
-  const carsResponse = await fetch(
-    `${baseUrl}/rest/v1/cars?select=id,owner_id&id=in.(${carIds.join(',')})`,
-    {
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  )
-
-  if (!carsResponse.ok) {
-    return { ok: false, status: 502, message: 'Could not validate report fleet access.' }
-  }
-
-  const accessibleCars = await carsResponse.json()
-
-  if (!Array.isArray(accessibleCars) || accessibleCars.length !== carIds.length) {
-    return { ok: false, status: 403, message: 'Report contains cars that are not accessible to the current user.' }
-  }
-
-  const hasOwnerMismatch = accessibleCars.some((car) => requestedCarOwnerById.get(car.id) !== car.owner_id)
-
-  if (hasOwnerMismatch) {
-    return { ok: false, status: 403, message: 'Report contains invalid fleet ownership data.' }
-  }
-
-  return { ok: true }
 }
 
 async function reserveDailyAiReportAttempt(req) {
@@ -399,6 +325,470 @@ function compactReport(report) {
       idleDays: finiteNumber(car.idleDays),
       profitPerAvailableDay: finiteNumber(car.profitPerAvailableDay),
     })),
+  }
+}
+
+function parseDateOnly(value) {
+  if (!DATE_PATTERN.test(value)) {
+    return null
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function toDateOnly(value) {
+  return typeof value === 'string' && value.length >= 10 ? value.slice(0, 10) : ''
+}
+
+function formatDateOnly(date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function addDays(dateString, days) {
+  const date = parseDateOnly(dateString)
+
+  if (!date) {
+    return dateString
+  }
+
+  date.setUTCDate(date.getUTCDate() + days)
+  return formatDateOnly(date)
+}
+
+function inclusiveDayCount(startDate, endDate) {
+  const start = parseDateOnly(startDate)
+  const end = parseDateOnly(endDate)
+
+  if (!start || !end || startDate > endDate) {
+    return 0
+  }
+
+  return Math.max(Math.round((end.getTime() - start.getTime()) / 86400000) + 1, 0)
+}
+
+function getOverlapInterval(first, second) {
+  const start = first.start > second.start ? first.start : second.start
+  const end = first.end < second.end ? first.end : second.end
+
+  return start <= end ? { start, end } : null
+}
+
+function mergeIntervals(intervals) {
+  const sortedIntervals = [...intervals].sort((first, second) => {
+    if (first.start !== second.start) {
+      return first.start.localeCompare(second.start)
+    }
+
+    return first.end.localeCompare(second.end)
+  })
+
+  return sortedIntervals.reduce((merged, interval) => {
+    const previous = merged[merged.length - 1]
+
+    if (!previous) {
+      merged.push({ ...interval })
+      return merged
+    }
+
+    if (interval.start <= addDays(previous.end, 1)) {
+      previous.end = previous.end > interval.end ? previous.end : interval.end
+      return merged
+    }
+
+    merged.push({ ...interval })
+    return merged
+  }, [])
+}
+
+function getIntervalsDayCount(intervals) {
+  return mergeIntervals(intervals).reduce((sum, interval) => sum + inclusiveDayCount(interval.start, interval.end), 0)
+}
+
+function getPriceUnitDivisor(unit) {
+  return unit === 'day' ? 1 : unit === 'week' ? 7 : 30
+}
+
+function calculateSegmentAccruedRevenue(segment, accruedDays) {
+  const totalDays = Math.max(inclusiveDayCount(segment.startDate, segment.endDate), 1)
+  const effectiveDays = Math.min(Math.max(accruedDays ?? totalDays, 0), totalDays)
+
+  return (effectiveDays / getPriceUnitDivisor(segment.priceUnit)) * finiteNumber(segment.pricePerUnit)
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function normalizeMarginScore(profitMargin) {
+  return clamp((profitMargin - -0.2) / 0.8, 0, 1)
+}
+
+function getVerdict(score) {
+  if (score >= 80) return 'very_good'
+  if (score >= 60) return 'good'
+  if (score >= 40) return 'monitor'
+  return 'replace_candidate'
+}
+
+function getServerOperationalCarState(car, rentals, maintenance, referenceDate) {
+  if (car.archivedAt || car.status === 'archived') {
+    return { status: 'archived', serviceReturnDate: undefined }
+  }
+
+  const activeServiceIntervals = maintenance
+    .filter((item) => item.carId === car.id && item.blocksAvailability)
+    .filter((item) => item.datePerformed <= referenceDate && item.serviceEndDate >= referenceDate)
+    .sort((first, second) => second.serviceEndDate.localeCompare(first.serviceEndDate))
+
+  if (activeServiceIntervals.length > 0) {
+    return { status: 'maintenance', serviceReturnDate: activeServiceIntervals[0]?.serviceEndDate }
+  }
+
+  const hasActiveRental = rentals.some(
+    (rental) =>
+      rental.carId === car.id &&
+      rental.status !== 'cancelled' &&
+      rental.startDate <= referenceDate &&
+      rental.endDate >= referenceDate,
+  )
+
+  return { status: hasActiveRental ? 'rented' : 'available', serviceReturnDate: undefined }
+}
+
+function buildServerCarMetrics(car, rentals, maintenance, periodStart, periodEnd) {
+  const effectivePeriodStart = periodStart > toDateOnly(car.createdAt) ? periodStart : toDateOnly(car.createdAt)
+  const totalDays = effectivePeriodStart <= periodEnd ? inclusiveDayCount(effectivePeriodStart, periodEnd) : 0
+  const maintenanceForCar = maintenance.filter((item) => item.carId === car.id)
+  const rentalsForCar = rentals.filter((item) => item.carId === car.id && item.status !== 'cancelled')
+  const serviceIntervals = maintenanceForCar
+    .filter((item) => item.blocksAvailability)
+    .map((item) => getOverlapInterval({ start: item.datePerformed, end: item.serviceEndDate }, { start: effectivePeriodStart, end: periodEnd }))
+    .filter(Boolean)
+  const rentalIntervals = rentalsForCar
+    .map((item) => getOverlapInterval({ start: item.startDate, end: item.endDate }, { start: effectivePeriodStart, end: periodEnd }))
+    .filter(Boolean)
+  const serviceDays = totalDays > 0 ? getIntervalsDayCount(serviceIntervals) : 0
+  const rentedDays = totalDays > 0 ? getIntervalsDayCount(rentalIntervals) : 0
+  const availableDays = Math.max(totalDays - serviceDays, 0)
+  const idleDays = Math.max(availableDays - rentedDays, 0)
+  const revenue = rentalsForCar.reduce((sum, rental) => {
+    const rentalRevenue = rental.segments.reduce((segmentSum, segment) => {
+      const overlap = getOverlapInterval({ start: segment.startDate, end: segment.endDate }, { start: effectivePeriodStart, end: periodEnd })
+
+      if (!overlap) {
+        return segmentSum
+      }
+
+      const overlapDays = inclusiveDayCount(overlap.start, overlap.end)
+
+      if (overlapDays <= 0) {
+        return segmentSum
+      }
+
+      return segmentSum + calculateSegmentAccruedRevenue(segment, overlapDays)
+    }, 0)
+
+    return sum + rentalRevenue
+  }, 0)
+  const maintenanceCost = maintenanceForCar
+    .filter((item) => item.datePerformed >= effectivePeriodStart && item.datePerformed <= periodEnd)
+    .reduce((sum, item) => sum + finiteNumber(item.cost), 0)
+  const insuranceAllocated = totalDays > 0 ? (finiteNumber(car.annualInsuranceCost) * totalDays) / 365 : 0
+  const totalCost = maintenanceCost + insuranceAllocated
+  const profit = revenue - totalCost
+  const profitMargin = revenue > 0 ? profit / revenue : 0
+  const utilization = availableDays > 0 ? rentedDays / availableDays : 0
+  const availability = totalDays > 0 ? availableDays / totalDays : 0
+  const profitPerAvailableDay = availableDays > 0 ? profit / availableDays : 0
+
+  return {
+    carId: car.id,
+    ownerId: car.ownerId,
+    brand: car.brand,
+    model: car.model,
+    licensePlate: car.licensePlate,
+    label: `${car.brand} ${car.model} - ${car.licensePlate}`,
+    status: car.status,
+    totalDays,
+    serviceDays,
+    availableDays,
+    rentedDays,
+    idleDays,
+    revenue,
+    maintenanceCost,
+    insuranceAllocated,
+    totalCost,
+    profit,
+    profitMargin,
+    utilization,
+    availability,
+    profitPerAvailableDay,
+  }
+}
+
+function buildServerTotals(cars) {
+  const totalDays = cars.reduce((sum, car) => sum + car.totalDays, 0)
+  const totalServiceDays = cars.reduce((sum, car) => sum + car.serviceDays, 0)
+  const totalAvailableDays = cars.reduce((sum, car) => sum + car.availableDays, 0)
+  const totalRentedDays = cars.reduce((sum, car) => sum + car.rentedDays, 0)
+  const totalIdleDays = cars.reduce((sum, car) => sum + car.idleDays, 0)
+  const totalRevenue = cars.reduce((sum, car) => sum + car.revenue, 0)
+  const totalMaintenanceCost = cars.reduce((sum, car) => sum + car.maintenanceCost, 0)
+  const totalInsuranceCost = cars.reduce((sum, car) => sum + car.insuranceAllocated, 0)
+  const totalCost = cars.reduce((sum, car) => sum + car.totalCost, 0)
+  const totalProfit = cars.reduce((sum, car) => sum + car.profit, 0)
+
+  return {
+    carCount: cars.length,
+    totalDays,
+    totalServiceDays,
+    totalAvailableDays,
+    totalRentedDays,
+    totalIdleDays,
+    totalRevenue,
+    totalMaintenanceCost,
+    totalInsuranceCost,
+    totalCost,
+    totalProfit,
+    utilization: totalAvailableDays > 0 ? totalRentedDays / totalAvailableDays : 0,
+    availability: totalDays > 0 ? totalAvailableDays / totalDays : 0,
+    profitMargin: totalRevenue > 0 ? totalProfit / totalRevenue : 0,
+    profitPerAvailableDay: totalAvailableDays > 0 ? totalProfit / totalAvailableDays : 0,
+  }
+}
+
+function buildServerFleetReportSnapshot(report, data) {
+  const periodStart = toDateOnly(report.periodStart)
+  const periodEnd = toDateOnly(report.periodEnd)
+  const referenceDate = periodEnd
+  const rentals = data.rentals.map((rental) => ({
+    ...rental,
+    segments: data.segmentsByRentalId.get(rental.id) ?? [],
+  }))
+  const operationalCars = data.cars.map((car) => {
+    const derived = getServerOperationalCarState(car, rentals, data.maintenance, referenceDate)
+    return {
+      ...car,
+      status: derived.status,
+      serviceReturnDate: derived.serviceReturnDate,
+    }
+  })
+  const baseCarMetrics = operationalCars.map((car) => buildServerCarMetrics(car, rentals, data.maintenance, periodStart, periodEnd))
+  const productionValues = baseCarMetrics.map((item) => item.profitPerAvailableDay)
+  const maxProduction = Math.max(...productionValues, 0)
+  const minProduction = Math.min(...productionValues, 0)
+  const scoredCars = baseCarMetrics
+    .map((item) => {
+      const productionScore =
+        maxProduction <= 0
+          ? 0
+          : maxProduction === minProduction
+            ? 1
+            : clamp((item.profitPerAvailableDay - minProduction) / (maxProduction - minProduction), 0, 1)
+      const marginScore = normalizeMarginScore(item.profitMargin)
+      const weightedScore = productionScore * 0.35 + marginScore * 0.25 + item.utilization * 0.2 + item.availability * 0.2
+      const score = Math.round(weightedScore * 100)
+
+      return {
+        ...item,
+        score,
+        verdict: getVerdict(score),
+      }
+    })
+    .sort((first, second) => {
+      if (first.score !== second.score) {
+        return second.score - first.score
+      }
+
+      if (first.profit !== second.profit) {
+        return second.profit - first.profit
+      }
+
+      return first.licensePlate.localeCompare(second.licensePlate, 'ro-RO')
+    })
+  const totalWeight = scoredCars.reduce((sum, car) => sum + car.totalDays, 0)
+  const overallScore =
+    totalWeight > 0 ? Math.round(scoredCars.reduce((sum, car) => sum + car.score * car.totalDays, 0) / totalWeight) : 0
+
+  return {
+    generatedAt: new Date().toISOString(),
+    periodKind: report.periodKind,
+    periodStart,
+    periodEnd,
+    selectedOwnerIds: getUniqueStrings(report.selectedOwnerIds),
+    scoringVersion: FLEET_REPORT_SCORING_VERSION,
+    overallScore,
+    totals: buildServerTotals(scoredCars),
+    cars: scoredCars,
+  }
+}
+
+async function fetchSupabaseRows(baseUrl, supabaseAnonKey, token, queryPath) {
+  const response = await fetch(`${baseUrl}/rest/v1/${queryPath}`, {
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error('Could not load report data from Supabase.')
+  }
+
+  return response.json()
+}
+
+function mapServerCar(row) {
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    licensePlate: row.license_plate,
+    brand: row.brand,
+    model: row.model,
+    status: row.status,
+    annualInsuranceCost: finiteNumber(row.annual_insurance_cost),
+    archivedAt: row.archived_at ?? undefined,
+    serviceReturnDate: row.service_return_date ?? undefined,
+    createdAt: row.created_at ?? new Date().toISOString(),
+  }
+}
+
+function mapServerRental(row) {
+  return {
+    id: row.id,
+    carId: row.car_id,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    status: row.status,
+  }
+}
+
+function mapServerSegment(row) {
+  return {
+    id: row.id,
+    rentalId: row.rental_id,
+    pricePerUnit: finiteNumber(row.price_per_unit),
+    priceUnit: row.price_unit,
+    startDate: row.start_date,
+    endDate: row.end_date,
+  }
+}
+
+function mapServerMaintenance(row) {
+  return {
+    id: row.id,
+    carId: row.car_id,
+    cost: finiteNumber(row.cost),
+    datePerformed: row.date_performed,
+    serviceEndDate: row.service_end_date ?? row.date_performed,
+    blocksAvailability: Boolean(row.blocks_availability),
+  }
+}
+
+async function fetchReportData(req, report) {
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
+  const token = getBearerToken(req)
+  const selectedOwnerIds = getUniqueStrings(report.selectedOwnerIds)
+  const reportCars = report.cars.map((car) => ({
+    carId: car.carId.trim(),
+    ownerId: car.ownerId.trim(),
+  }))
+  const carIds = getUniqueStrings(reportCars.map((car) => car.carId))
+
+  if (!supabaseUrl || !supabaseAnonKey || !token) {
+    return { ok: false, status: 503, message: 'Supabase access validation is not configured for AI reports.' }
+  }
+
+  if (
+    selectedOwnerIds.length !== report.selectedOwnerIds.length ||
+    carIds.length !== report.cars.length ||
+    !selectedOwnerIds.every((id) => UUID_PATTERN.test(id)) ||
+    !reportCars.every((car) => UUID_PATTERN.test(car.carId) && UUID_PATTERN.test(car.ownerId))
+  ) {
+    return { ok: false, status: 400, message: 'Invalid report fleet identifiers.' }
+  }
+
+  const selectedOwnerSet = new Set(selectedOwnerIds)
+  const requestedCarOwnerById = new Map(reportCars.map((car) => [car.carId, car.ownerId]))
+
+  if (!reportCars.every((car) => selectedOwnerSet.has(car.ownerId))) {
+    return { ok: false, status: 403, message: 'Report contains cars outside the selected fleets.' }
+  }
+
+  const baseUrl = supabaseUrl.replace(/\/$/, '')
+
+  try {
+    const accessibleProfiles = await fetchSupabaseRows(baseUrl, supabaseAnonKey, token, `profiles?select=id&id=in.(${selectedOwnerIds.join(',')})`)
+
+    if (!Array.isArray(accessibleProfiles) || accessibleProfiles.length !== selectedOwnerIds.length) {
+      return { ok: false, status: 403, message: 'Report contains fleets that are not accessible to the current user.' }
+    }
+
+    const accessibleCars = await fetchSupabaseRows(
+      baseUrl,
+      supabaseAnonKey,
+      token,
+      `cars?select=id,owner_id,license_plate,brand,model,status,annual_insurance_cost,archived_at,service_return_date,created_at&id=in.(${carIds.join(',')})`,
+    )
+
+    if (!Array.isArray(accessibleCars) || accessibleCars.length !== carIds.length) {
+      return { ok: false, status: 403, message: 'Report contains cars that are not accessible to the current user.' }
+    }
+
+    const hasOwnerMismatch = accessibleCars.some((car) => requestedCarOwnerById.get(car.id) !== car.owner_id)
+
+    if (hasOwnerMismatch) {
+      return { ok: false, status: 403, message: 'Report contains invalid fleet ownership data.' }
+    }
+
+    const rentalRows = await fetchSupabaseRows(
+      baseUrl,
+      supabaseAnonKey,
+      token,
+      `rentals?select=id,car_id,start_date,end_date,status&car_id=in.(${carIds.join(',')})`,
+    )
+    const rentalIds = getUniqueStrings((Array.isArray(rentalRows) ? rentalRows : []).map((row) => row.id))
+    const segmentRows =
+      rentalIds.length > 0
+        ? await fetchSupabaseRows(
+            baseUrl,
+            supabaseAnonKey,
+            token,
+            `rental_price_segments?select=id,rental_id,price_per_unit,price_unit,start_date,end_date&rental_id=in.(${rentalIds.join(',')})`,
+          )
+        : []
+    const maintenanceRows = await fetchSupabaseRows(
+      baseUrl,
+      supabaseAnonKey,
+      token,
+      `maintenance?select=id,car_id,cost,date_performed,service_end_date,blocks_availability&car_id=in.(${carIds.join(',')})`,
+    )
+    const segments = (Array.isArray(segmentRows) ? segmentRows : []).map(mapServerSegment)
+    const segmentsByRentalId = segments.reduce((map, segment) => {
+      const currentSegments = map.get(segment.rentalId)
+
+      if (currentSegments) {
+        currentSegments.push(segment)
+      } else {
+        map.set(segment.rentalId, [segment])
+      }
+
+      return map
+    }, new Map())
+
+    return {
+      ok: true,
+      data: {
+        cars: accessibleCars.map(mapServerCar),
+        rentals: (Array.isArray(rentalRows) ? rentalRows : []).map(mapServerRental),
+        segmentsByRentalId,
+        maintenance: (Array.isArray(maintenanceRows) ? maintenanceRows : []).map(mapServerMaintenance),
+      },
+    }
+  } catch (error) {
+    return { ok: false, status: 502, message: error instanceof Error ? error.message : 'Could not validate report data.' }
   }
 }
 
@@ -604,18 +994,27 @@ export default async function handler(req, res) {
       return res.status(503).json({ message: 'GEMINI_API_KEY is not configured.' })
     }
 
-    const body = readRequestBody(req)
+    let body = null
+
+    try {
+      body = readRequestBody(req)
+    } catch {
+      return res.status(400).json({ message: 'Invalid JSON payload.' })
+    }
+
     const report = body?.report
 
     if (!isValidReportPayload(report)) {
       return res.status(400).json({ message: 'Invalid report payload.' })
     }
 
-    const access = await verifyReportFleetAccess(req, report)
+    const reportData = await fetchReportData(req, report)
 
-    if (!access.ok) {
-      return res.status(access.status).json({ message: access.message })
+    if (!reportData.ok) {
+      return res.status(reportData.status).json({ message: reportData.message })
     }
+
+    const serverReport = buildServerFleetReportSnapshot(report, reportData.data)
 
     const usageReservation = await reserveDailyAiReportAttempt(req)
 
@@ -639,7 +1038,7 @@ export default async function handler(req, res) {
       'Pastreaza fiecare observatie intr-o singura propozitie scurta.',
       '',
       'Snapshot raport:',
-      JSON.stringify(compactReport(report)),
+      JSON.stringify(compactReport(serverReport)),
     ].join('\n')
 
     const geminiResponse = await generateGeminiContent(apiKey, {
@@ -688,6 +1087,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         provider: 'gemini',
         model: MODEL,
+        report: serverReport,
         data: normalizeAiSummary(parseAiSummaryText(responseText)),
       })
     } catch (error) {

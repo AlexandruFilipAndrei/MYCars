@@ -46,6 +46,7 @@ function createEmptyState(isLoading: boolean) {
     invites: [] as FleetAccess[],
     incomingInvites: [] as FleetAccess[],
     isLoading,
+    loadError: null as string | null,
   }
 }
 
@@ -205,6 +206,7 @@ interface AppState {
   invites: FleetAccess[]
   incomingInvites: FleetAccess[]
   isLoading: boolean
+  loadError: string | null
   reset: (isLoading?: boolean) => void
   bootstrap: (user: { id: string; email: string; fullName: string } | null) => Promise<void>
   saveCar: (
@@ -272,11 +274,11 @@ export const useAppStore = create<AppState>((set) => {
 
     if (options.showLoading) {
       if (cachedState) {
-        set({ ...cachedState, activeUserId: user.id, isLoading: false })
+        set({ ...cachedState, activeUserId: user.id, isLoading: false, loadError: null })
       } else if (currentState.activeUserId !== user.id) {
         set({ ...createEmptyState(true), activeUserId: user.id })
       } else {
-        set((state) => ({ ...state, isLoading: true }))
+        set((state) => ({ ...state, isLoading: true, loadError: null }))
       }
     }
 
@@ -300,7 +302,7 @@ export const useAppStore = create<AppState>((set) => {
       writePersistedAppData(user.id, mergedState)
       set((current) =>
         current.activeUserId === user.id && requestId === bootstrapRequestId
-          ? { ...mergedState, activeUserId: user.id, isLoading: false }
+          ? { ...mergedState, activeUserId: user.id, isLoading: false, loadError: null }
           : current,
       )
 
@@ -347,7 +349,13 @@ export const useAppStore = create<AppState>((set) => {
       }
 
       set((current) =>
-        current.activeUserId === user.id && requestId === bootstrapRequestId ? { ...current, isLoading: false } : current,
+        current.activeUserId === user.id && requestId === bootstrapRequestId
+          ? {
+              ...current,
+              isLoading: false,
+              loadError: 'Nu am putut sincroniza datele cu serverul. Este posibil sa vezi temporar date salvate local.',
+            }
+          : current,
       )
     }
   }

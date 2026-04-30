@@ -36,7 +36,7 @@ export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const { notifications, bootstrap, carPhotos, cars, documents, incomingInvites, invites, isLoading, maintenance, profile, rentals } =
+  const { notifications, bootstrap, carPhotos, cars, documents, incomingInvites, invites, isLoading, loadError, maintenance, profile, rentals } =
     useAppStore()
   const { user, signOut, isDemo } = useAuthStore()
   const { isDark, setIsDark } = useDarkMode()
@@ -155,6 +155,11 @@ export function AppShell() {
               </div>
             ) : (
               <>
+                {loadError ? (
+                  <div className="mx-4 rounded-2xl border border-amber-400/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+                    {loadError}
+                  </div>
+                ) : null}
                 {shouldShowFleetFilter ? <FleetFilterBar /> : null}
                 <Outlet />
               </>

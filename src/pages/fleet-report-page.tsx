@@ -117,17 +117,19 @@ export function FleetReportPage() {
           }
         : await generateFleetReportAiSummary(snapshot)
 
-      const aiSummary = aiResult.status === 'success' ? aiResult.summary : buildFallbackFleetReportAiSummary(snapshot)
+      const reportSnapshot = aiResult.status === 'success' && aiResult.report ? aiResult.report : snapshot
+      const aiSummary = aiResult.status === 'success' ? aiResult.summary : buildFallbackFleetReportAiSummary(reportSnapshot)
       const savedReport = await saveFleetReport({
         periodKind,
-        periodStart: snapshot.periodStart,
-        periodEnd: snapshot.periodEnd,
+        periodStart: reportSnapshot.periodStart,
+        periodEnd: reportSnapshot.periodEnd,
         selectedOwnerIds: normalizedSelectedOwnerIds,
-        scoringVersion: snapshot.scoringVersion,
+        scoringVersion: reportSnapshot.scoringVersion,
         aiProvider: aiResult.status === 'success' ? aiResult.provider : 'local',
         aiModel: aiResult.status === 'success' ? aiResult.model : 'fleet-report-fallback-v1',
         report: {
-          ...snapshot,
+          ...reportSnapshot,
+          selectedOwnerIds: normalizedSelectedOwnerIds,
           aiSummary,
         },
       })

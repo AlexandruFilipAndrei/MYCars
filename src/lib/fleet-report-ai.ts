@@ -6,6 +6,7 @@ type AiGenerationSuccess = {
   provider: string
   model: string
   summary: FleetReportAiSummary
+  report?: FleetReportSnapshot
 }
 
 type AiGenerationUnavailable = {
@@ -19,6 +20,7 @@ type FleetReportAiResponse = {
   provider?: string
   model?: string
   data?: FleetReportAiSummary
+  report?: FleetReportSnapshot
 }
 
 async function readErrorMessage(response: Response) {
@@ -65,6 +67,7 @@ export async function generateFleetReportAiSummary(report: FleetReportSnapshot):
       provider: payload.provider ?? 'gemini',
       model: payload.model ?? 'gemini-2.5-flash',
       summary: payload.data,
+      report: payload.report,
     }
   } catch (error) {
     return {

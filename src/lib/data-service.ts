@@ -1835,6 +1835,11 @@ export const dataService = {
         ? await table('maintenance_documents').select('file_url').in('maintenance_id', maintenanceIds)
         : { data: [], error: null }
 
+    const { error } = await table('cars').delete().eq('id', id)
+    if (error) {
+      throw new Error(error.message)
+    }
+
     await tryRemoveStorageFiles(
       'car-documents',
       ((documentsResult.data ?? []) as Array<{ file_url: string | null }>).map((document) => document.file_url),
@@ -1847,11 +1852,6 @@ export const dataService = {
       'maintenance-documents',
       ((maintenanceDocumentsResult.data ?? []) as Array<{ file_url: string | null }>).map((document) => document.file_url),
     )
-
-    const { error } = await table('cars').delete().eq('id', id)
-    if (error) {
-      throw new Error(error.message)
-    }
   },
 
   async updateCarNotes(user: AppUser, id: string, notes: string) {
@@ -1911,12 +1911,12 @@ export const dataService = {
       throw new Error(documentResult.error.message)
     }
 
-    await tryRemoveStorageFiles('car-documents', [documentResult.data?.file_url as string | null | undefined])
-
     const { error } = await table('car_documents').delete().eq('id', id)
     if (error) {
       throw new Error(error.message)
     }
+
+    await tryRemoveStorageFiles('car-documents', [documentResult.data?.file_url as string | null | undefined])
   },
 
   async deleteCarPhoto(user: AppUser, id: string) {
@@ -1938,12 +1938,12 @@ export const dataService = {
       throw new Error(photoResult.error.message)
     }
 
-    await tryRemoveStorageFiles('car-photos', [photoResult.data?.file_url as string | null | undefined])
-
     const { error } = await table('car_photos').delete().eq('id', id)
     if (error) {
       throw new Error(error.message)
     }
+
+    await tryRemoveStorageFiles('car-photos', [photoResult.data?.file_url as string | null | undefined])
   },
 
   async saveRental(user: AppUser, input: Omit<Rental, 'id' | 'createdAt' | 'updatedAt' | 'photos'> & { id?: string }) {
@@ -2193,15 +2193,16 @@ export const dataService = {
     }
 
     const documentsResult = await table('maintenance_documents').select('file_url').eq('maintenance_id', id)
-    await tryRemoveStorageFiles(
-      'maintenance-documents',
-      ((documentsResult.data ?? []) as Array<{ file_url: string | null }>).map((document) => document.file_url),
-    )
 
     const { error } = await table('maintenance').delete().eq('id', id)
     if (error) {
       throw new Error(error.message)
     }
+
+    await tryRemoveStorageFiles(
+      'maintenance-documents',
+      ((documentsResult.data ?? []) as Array<{ file_url: string | null }>).map((document) => document.file_url),
+    )
 
     const affectedCarId = maintenanceResult.data?.car_id
     if (affectedCarId) {
