@@ -344,7 +344,43 @@ async function reserveDailyAiReportAttempt(req, targetModel) {
     }
   }
 
-  return { ok: true }
+  return {
+    ok: true,
+    eventId: compactText(reservation?.eventId ?? reservation?.event_id, 80) || null,
+  }
+}
+
+async function releaseDailyAiReportAttempt(req, eventId) {
+  if (!eventId || !UUID_PATTERN.test(eventId)) {
+    return false
+  }
+
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
+    const token = getBearerToken(req)
+
+    if (!supabaseUrl || !supabaseAnonKey || !token) {
+      return false
+    }
+
+    const baseUrl = supabaseUrl.replace(/\/$/, '')
+    const releaseResponse = await fetch(`${baseUrl}/rest/v1/rpc/release_ai_report_usage_event`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        target_event_id: eventId,
+      }),
+    })
+
+    return releaseResponse.ok
+  } catch {
+    return false
+  }
 }
 
 function finiteNumber(value) {
@@ -822,7 +858,7 @@ async function fetchReportData(req, report) {
       baseUrl,
       supabaseAnonKey,
       token,
-      `rentals?select=id,car_id,start_date,end_date,status&car_id=in.(${carIds.join(',')})`,
+      `rentals?select=id,car_id,start_date,end_date,status&car_id=in.(${carIds.join(',')})&start_date=lte.${report.periodEnd}&end_date=gte.${report.periodStart}`,
     )
     const rentalIds = getUniqueStrings((Array.isArray(rentalRows) ? rentalRows : []).map((row) => row.id))
     const segmentRows =
@@ -838,7 +874,7 @@ async function fetchReportData(req, report) {
       baseUrl,
       supabaseAnonKey,
       token,
-      `maintenance?select=id,car_id,cost,date_performed,service_end_date,blocks_availability&car_id=in.(${carIds.join(',')})`,
+      `maintenance?select=id,car_id,cost,date_performed,service_end_date,blocks_availability&car_id=in.(${carIds.join(',')})&date_performed=lte.${report.periodEnd}&service_end_date=gte.${report.periodStart}`,
     )
     const segments = (Array.isArray(segmentRows) ? segmentRows : []).map(mapServerSegment)
     const segmentsByRentalId = segments.reduce((map, segment) => {
@@ -1056,6 +1092,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method not allowed.' })
   }
 
+  let usageReservation = null
+
   try {
     const auth = await verifySupabaseUser(req)
 
@@ -1092,7 +1130,7 @@ export default async function handler(req, res) {
     const serverReport = buildServerFleetReportSnapshot(report, reportData.data)
 
     const configuredModels = getConfiguredGeminiModels()
-    const usageReservation = await reserveDailyAiReportAttempt(req, configuredModels.join(','))
+    usageReservation = await reserveDailyAiReportAttempt(req, configuredModels.join(','))
 
     if (!usageReservation.ok) {
       return res.status(usageReservation.status).json({ message: usageReservation.message })
@@ -1137,6 +1175,8 @@ export default async function handler(req, res) {
     })
 
     if (!aiSummary.ok) {
+      await releaseDailyAiReportAttempt(req, usageReservation.eventId)
+
       return res.status(aiSummary.status).json({
         message: aiSummary.message,
         promptFeedback: aiSummary.promptFeedback ?? null,
@@ -1151,6 +1191,8 @@ export default async function handler(req, res) {
       data: aiSummary.data,
     })
   } catch (error) {
+    await releaseDailyAiReportAttempt(req, usageReservation?.eventId)
+
     return res.status(500).json({
       message: error instanceof Error ? error.message : 'Unexpected AI generation error.',
     })

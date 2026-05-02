@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, ImagePlus, UploadCloud, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -9,9 +9,17 @@ type FileDropzoneProps = {
   files: File[]
   accept?: string
   multiple?: boolean
+  maxFileSizeMb?: number
   error?: string
   hint?: string
   onChange: (files: File[]) => void
+}
+
+const defaultMaxFileSizeMb = 10
+
+type RejectedFile = {
+  name: string
+  reason: string
 }
 
 function isImage(file: File) {
@@ -37,13 +45,30 @@ function matchesAcceptToken(file: File, token: string) {
   return file.type.toLowerCase() === normalizedToken
 }
 
-function filterAcceptedFiles(files: File[], accept?: string) {
-  if (!accept?.trim()) {
-    return files
-  }
+function formatFileSize(bytes: number) {
+  return `${Math.round(bytes / 1024 / 1024)} MB`
+}
 
-  const tokens = accept.split(',')
-  return files.filter((file) => tokens.some((token) => matchesAcceptToken(file, token)))
+function validateFiles(files: File[], accept: string | undefined, maxFileSizeBytes: number) {
+  const tokens = accept?.trim() ? accept.split(',') : []
+  const accepted: File[] = []
+  const rejected: RejectedFile[] = []
+
+  files.forEach((file) => {
+    if (tokens.length > 0 && !tokens.some((token) => matchesAcceptToken(file, token))) {
+      rejected.push({ name: file.name, reason: 'tip invalid' })
+      return
+    }
+
+    if (file.size > maxFileSizeBytes) {
+      rejected.push({ name: file.name, reason: 'prea mare' })
+      return
+    }
+
+    accepted.push(file)
+  })
+
+  return { accepted, rejected }
 }
 
 function mergeFiles(existingFiles: File[], nextFiles: File[], multiple: boolean) {
@@ -57,8 +82,12 @@ function mergeFiles(existingFiles: File[], nextFiles: File[], multiple: boolean)
   return Array.from(uniqueFiles.values())
 }
 
-export function FileDropzone({ label, files, accept, multiple = true, error, hint, onChange }: FileDropzoneProps) {
+export function FileDropzone({ label, files, accept, multiple = true, maxFileSizeMb = defaultMaxFileSizeMb, error, hint, onChange }: FileDropzoneProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const [rejectedFiles, setRejectedFiles] = useState<RejectedFile[]>([])
+  const maxFileSizeBytes = Math.max(1, maxFileSizeMb) * 1024 * 1024
+  const sizeHint = `Maxim ${formatFileSize(maxFileSizeBytes)} / fisier.`
+  const displayHint = hint ? `${hint} ${sizeHint}` : sizeHint
   const previews = useMemo(
     () =>
       files.map((file) => ({
@@ -79,6 +108,16 @@ export function FileDropzone({ label, files, accept, multiple = true, error, hin
     }
   }, [previews])
 
+  const addFiles = (nextFiles: File[]) => {
+    const { accepted, rejected } = validateFiles(nextFiles, accept, maxFileSizeBytes)
+
+    setRejectedFiles(rejected)
+
+    if (accepted.length > 0) {
+      onChange(mergeFiles(files, accepted, multiple))
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div
@@ -89,8 +128,7 @@ export function FileDropzone({ label, files, accept, multiple = true, error, hin
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault()
-          const droppedFiles = filterAcceptedFiles(Array.from(event.dataTransfer.files), accept)
-          onChange(mergeFiles(files, droppedFiles, multiple))
+          addFiles(Array.from(event.dataTransfer.files))
         }}
       >
         <input
@@ -100,8 +138,7 @@ export function FileDropzone({ label, files, accept, multiple = true, error, hin
           accept={accept}
           className="hidden"
           onChange={(event) => {
-            const selectedFiles = filterAcceptedFiles(Array.from(event.target.files ?? []), accept)
-            onChange(mergeFiles(files, selectedFiles, multiple))
+            addFiles(Array.from(event.target.files ?? []))
             event.target.value = ''
           }}
         />
@@ -113,7 +150,7 @@ export function FileDropzone({ label, files, accept, multiple = true, error, hin
           <div>
             <p className="font-semibold">{label}</p>
             <p className="text-sm text-muted-foreground">Trage fișierele aici sau apasă pentru a selecta.</p>
-            {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+            <p className="mt-1 text-xs text-muted-foreground">{displayHint}</p>
           </div>
           <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
             <ImagePlus className="h-4 w-4" />
@@ -123,6 +160,12 @@ export function FileDropzone({ label, files, accept, multiple = true, error, hin
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {rejectedFiles.length > 0 ? (
+        <p className="text-sm text-destructive">
+          Nu am adaugat {rejectedFiles.map((file) => `${file.name} (${file.reason})`).join(', ')}. Verifica tipul fisierului si limita de{' '}
+          {formatFileSize(maxFileSizeBytes)}.
+        </p>
+      ) : null}
 
       {previews.length > 0 ? (
         <div className="grid gap-3 md:grid-cols-2">

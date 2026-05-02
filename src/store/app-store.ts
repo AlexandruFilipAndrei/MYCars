@@ -364,6 +364,12 @@ export const useAppStore = create<AppState>((set) => {
     ...createEmptyState(true),
 
     reset(isLoading = false) {
+      const currentUserId = useAppStore.getState().activeUserId
+
+      if (currentUserId) {
+        clearPersistedAppData(currentUserId)
+      }
+
       bootstrapRequestId += 1
       set(createEmptyState(isLoading))
     },

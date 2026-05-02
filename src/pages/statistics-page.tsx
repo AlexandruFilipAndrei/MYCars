@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { calculateSegmentAccruedRevenue, formatCurrency } from '@/lib/format'
 import { useAppStore } from '@/store/app-store'
-import type { Maintenance, Rental, RentalPriceSegment } from '@/types/models'
+import type { Car, Maintenance, Rental, RentalPriceSegment } from '@/types/models'
 
 type StatisticsBucket = {
   key: string
@@ -74,15 +74,32 @@ function getMaintenanceCostInBucket(item: Maintenance, bucketStart: Date, bucket
   return item.cost
 }
 
+function getInsuranceCostInBucket(car: Car, bucketStart: Date, bucketEnd: Date) {
+  const createdAt = parseDate(car.createdAt) ?? bucketStart
+  const archivedAt = car.archivedAt ? parseDate(car.archivedAt) : null
+  const activeEnd = archivedAt ?? bucketEnd
+  const activeDays = getInclusiveOverlapDays(createdAt, activeEnd, bucketStart, bucketEnd)
+
+  return activeDays > 0 ? (car.annualInsuranceCost * activeDays) / 365 : 0
+}
+
 function maintenanceIsInPeriod(item: Maintenance, periodStart: Date, periodEnd: Date) {
   const datePerformed = parseDate(item.datePerformed)
 
   return Boolean(datePerformed && datePerformed >= periodStart && datePerformed <= periodEnd)
 }
 
-function getFinancialYears(rentals: Rental[], maintenance: Maintenance[]) {
+function getFinancialYears(rentals: Rental[], maintenance: Maintenance[], cars: Car[]) {
   const currentYear = new Date().getFullYear()
   const years = new Set<number>([currentYear])
+
+  cars.forEach((car) => {
+    const createdAt = parseDate(car.createdAt)
+    const archivedAt = car.archivedAt ? parseDate(car.archivedAt) : null
+
+    if (createdAt) years.add(createdAt.getFullYear())
+    if (archivedAt) years.add(archivedAt.getFullYear())
+  })
 
   rentals.forEach((rental) => {
     rental.segments.forEach((segment) => {
@@ -170,7 +187,7 @@ function getPeriodLabel(period: string) {
   return `anul ${rawYear}`
 }
 
-function buildStatisticsData(buckets: StatisticsBucket[], rentals: Rental[], maintenance: Maintenance[]) {
+function buildStatisticsData(buckets: StatisticsBucket[], rentals: Rental[], maintenance: Maintenance[], cars: Car[]) {
   return buckets.map((bucket) => {
     const venituri = rentals
       .filter((rental) => rental.status !== 'cancelled')
@@ -180,7 +197,9 @@ function buildStatisticsData(buckets: StatisticsBucket[], rentals: Rental[], mai
         0,
       )
 
-    const cheltuieli = maintenance.reduce((sum, item) => sum + getMaintenanceCostInBucket(item, bucket.start, bucket.end), 0)
+    const maintenanceCost = maintenance.reduce((sum, item) => sum + getMaintenanceCostInBucket(item, bucket.start, bucket.end), 0)
+    const insuranceCost = cars.reduce((sum, car) => sum + getInsuranceCostInBucket(car, bucket.start, bucket.end), 0)
+    const cheltuieli = maintenanceCost + insuranceCost
 
     return {
       ...bucket,
@@ -205,7 +224,7 @@ export function StatisticsPage() {
     () => maintenance.filter((item) => matchesOwner(carsById.get(item.carId)?.ownerId ?? '')),
     [carsById, maintenance, matchesOwner],
   )
-  const years = useMemo(() => getFinancialYears(filteredRentals, filteredMaintenance), [filteredMaintenance, filteredRentals])
+  const years = useMemo(() => getFinancialYears(filteredRentals, filteredMaintenance, filteredCars), [filteredCars, filteredMaintenance, filteredRentals])
   const buckets = useMemo(() => buildBuckets(period, years), [period, years])
   const periodRange = useMemo(
     () => ({
@@ -214,7 +233,10 @@ export function StatisticsPage() {
     }),
     [buckets],
   )
-  const chartData = useMemo(() => buildStatisticsData(buckets, filteredRentals, filteredMaintenance), [buckets, filteredMaintenance, filteredRentals])
+  const chartData = useMemo(
+    () => buildStatisticsData(buckets, filteredRentals, filteredMaintenance, filteredCars),
+    [buckets, filteredCars, filteredMaintenance, filteredRentals],
+  )
   const periodRentals = useMemo(() => {
     if (!periodRange.start || !periodRange.end) {
       return []
@@ -314,7 +336,7 @@ export function StatisticsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Evolutie profit</CardTitle>
-            <p className="text-sm text-muted-foreground">Profit calculat din veniturile alocate perioadei minus interventiile din perioada.</p>
+            <p className="text-sm text-muted-foreground">Profit calculat din veniturile alocate perioadei minus interventiile si asigurarea alocata.</p>
           </CardHeader>
           <CardContent className="h-[340px]">
             <ResponsiveContainer width="100%" height="100%">
