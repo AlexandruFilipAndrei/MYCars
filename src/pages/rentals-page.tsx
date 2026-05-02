@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 
-import { FleetOwnerBadge, EmptyState, PageHeader } from '@/components/shared'
+import { FleetOwnerBadge, EmptyState, PageHeader, SearchInput } from '@/components/shared'
 import { useFleetFilter } from '@/components/fleet-filter'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,6 +31,8 @@ type SegmentDraft = {
 
 type RentalValues = z.input<typeof rentalSchema>
 type RentalSubmitValues = z.output<typeof rentalSchema>
+type RentalStatusFilter = 'all' | Rental['status']
+type RentalPeriodFilter = 'all' | 'current' | 'upcoming' | 'past'
 
 function createDefaultSegment(startDate = '', endDate = ''): SegmentDraft {
   return {
@@ -67,6 +69,28 @@ function rangesOverlap(startA: string, endA: string, startB: string, endB: strin
   return !isBefore(aEnd, bStart) && !isAfter(aStart, bEnd)
 }
 
+function normalizeSearch(value: string) {
+  return value.toLowerCase().trim()
+}
+
+function matchesRentalPeriod(rental: Rental, filter: RentalPeriodFilter) {
+  if (filter === 'all') {
+    return true
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  if (filter === 'current') {
+    return rental.status !== 'cancelled' && rental.startDate <= today && rental.endDate >= today
+  }
+
+  if (filter === 'upcoming') {
+    return rental.status !== 'cancelled' && rental.startDate > today
+  }
+
+  return rental.endDate < today
+}
+
 export function RentalsPage() {
   const { cars, rentals, maintenance, profile, incomingInvites, saveRental, deleteRental } = useAppStore()
   const { matchesOwner } = useFleetFilter()
@@ -74,20 +98,51 @@ export function RentalsPage() {
   const [open, setOpen] = useState(false)
   const [editingRental, setEditingRental] = useState<Rental | null>(null)
   const [segment, setSegment] = useState<SegmentDraft>(createDefaultSegment())
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<RentalStatusFilter>('all')
+  const [periodFilter, setPeriodFilter] = useState<RentalPeriodFilter>('all')
 
+  const carsById = useMemo(() => new Map(cars.map((car) => [car.id, car])), [cars])
   const visibleCars = useMemo(() => cars.filter((car) => matchesOwner(car.ownerId)), [cars, matchesOwner])
   const visibleRentals = useMemo(
-    () => rentals.filter((rental) => matchesOwner(cars.find((car) => car.id === rental.carId)?.ownerId ?? '')),
-    [cars, matchesOwner, rentals],
+    () => rentals.filter((rental) => matchesOwner(carsById.get(rental.carId)?.ownerId ?? '')),
+    [carsById, matchesOwner, rentals],
   )
   const editableCars = useMemo(
     () => visibleCars.filter((car) => canEditCar(profile, incomingInvites, car)),
     [incomingInvites, profile, visibleCars],
   )
   const creatableCars = useMemo(() => editableCars.filter((car) => car.status !== 'archived'), [editableCars])
+  const filteredRentals = useMemo(() => {
+    const normalizedQuery = normalizeSearch(query)
+
+    return visibleRentals.filter((rental) => {
+      const car = carsById.get(rental.carId)
+      const matchesQuery =
+        normalizedQuery.length === 0 ||
+        [
+          rental.renterName,
+          rental.renterSurname,
+          rental.renterCnp,
+          rental.notes ?? '',
+          rental.startDate,
+          rental.endDate,
+          car?.brand ?? '',
+          car?.model ?? '',
+          car?.licensePlate ?? '',
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(normalizedQuery)
+      const matchesStatus = statusFilter === 'all' || rental.status === statusFilter
+      const matchesPeriod = matchesRentalPeriod(rental, periodFilter)
+
+      return matchesQuery && matchesStatus && matchesPeriod
+    })
+  }, [carsById, periodFilter, query, statusFilter, visibleRentals])
   const sortedRentals = useMemo(
     () =>
-      [...visibleRentals].sort((first, second) => {
+      [...filteredRentals].sort((first, second) => {
         const firstPriority = getRentalPriority(first.status)
         const secondPriority = getRentalPriority(second.status)
 
@@ -101,8 +156,9 @@ export function RentalsPage() {
 
         return second.createdAt.localeCompare(first.createdAt)
       }),
-    [visibleRentals],
+    [filteredRentals],
   )
+  const hasActiveFilters = Boolean(query.trim()) || statusFilter !== 'all' || periodFilter !== 'all'
 
   const form = useForm<RentalValues, unknown, RentalSubmitValues>({
     resolver: zodResolver(rentalSchema),
@@ -339,8 +395,55 @@ export function RentalsPage() {
     <div className="space-y-6">
       <PageHeader title="Inchirieri" action={creatableCars.length > 0 ? <Button onClick={openCreate}>Adauga inchiriere</Button> : undefined} />
 
+      <Card>
+        <CardContent className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,190px)_minmax(0,190px)_auto]">
+          <SearchInput value={query} onChange={setQuery} placeholder="Cauta dupa client, masina, CNP..." />
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as RentalStatusFilter)}
+            className="h-11 rounded-2xl border bg-card px-4 text-sm"
+          >
+            <option value="all">Toate statusurile</option>
+            <option value="active">Active</option>
+            <option value="completed">Finalizate</option>
+            <option value="cancelled">Anulate</option>
+          </select>
+          <select
+            value={periodFilter}
+            onChange={(event) => setPeriodFilter(event.target.value as RentalPeriodFilter)}
+            className="h-11 rounded-2xl border bg-card px-4 text-sm"
+          >
+            <option value="all">Toate perioadele</option>
+            <option value="current">In derulare acum</option>
+            <option value="upcoming">Viitoare</option>
+            <option value="past">Trecute</option>
+          </select>
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11"
+              onClick={() => {
+                setQuery('')
+                setStatusFilter('all')
+                setPeriodFilter('all')
+              }}
+            >
+              Reseteaza
+            </Button>
+          ) : null}
+        </CardContent>
+      </Card>
+
       {sortedRentals.length === 0 ? (
-        <EmptyState title="Nu exista inchirieri" description="Adauga prima inchiriere pentru a urmari veniturile si perioadele active." />
+        <EmptyState
+          title={visibleRentals.length === 0 ? 'Nu exista inchirieri' : 'Nu am gasit inchirieri'}
+          description={
+            visibleRentals.length === 0
+              ? 'Adauga prima inchiriere pentru a urmari veniturile si perioadele active.'
+              : 'Incearca sa modifici filtrele sau cautarea.'
+          }
+        />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {sortedRentals.map((rental) => {

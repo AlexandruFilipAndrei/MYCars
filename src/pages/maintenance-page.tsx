@@ -7,7 +7,7 @@ import { useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import { FileDropzone } from '@/components/file-dropzone'
-import { FleetOwnerBadge, EmptyState, PageHeader } from '@/components/shared'
+import { FleetOwnerBadge, EmptyState, PageHeader, SearchInput } from '@/components/shared'
 import { useFleetFilter } from '@/components/fleet-filter'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -23,6 +23,8 @@ import { useAppStore } from '@/store/app-store'
 
 type MaintenanceValues = z.input<typeof maintenanceSchema>
 type MaintenanceSubmitValues = z.output<typeof maintenanceSchema>
+type MaintenanceTypeFilter = 'all' | MaintenanceSubmitValues['type']
+type MaintenanceAvailabilityFilter = 'all' | 'blocks' | 'non_blocks'
 
 function createDefaultMaintenanceValues(carId = ''): MaintenanceValues {
   return {
@@ -38,6 +40,10 @@ function createDefaultMaintenanceValues(carId = ''): MaintenanceValues {
   }
 }
 
+function normalizeSearch(value: string) {
+  return value.toLowerCase().trim()
+}
+
 export function MaintenancePage() {
   const { cars, rentals, maintenance, profile, incomingInvites, saveMaintenance, deleteMaintenance } = useAppStore()
   const { matchesOwner } = useFleetFilter()
@@ -45,27 +51,63 @@ export function MaintenancePage() {
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [documentFiles, setDocumentFiles] = useState<File[]>([])
+  const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<MaintenanceTypeFilter>('all')
+  const [availabilityFilter, setAvailabilityFilter] = useState<MaintenanceAvailabilityFilter>('all')
 
+  const carsById = useMemo(() => new Map(cars.map((car) => [car.id, car])), [cars])
   const visibleCars = useMemo(() => cars.filter((car) => matchesOwner(car.ownerId)), [cars, matchesOwner])
   const visibleMaintenance = useMemo(
-    () => maintenance.filter((item) => matchesOwner(cars.find((car) => car.id === item.carId)?.ownerId ?? '')),
-    [cars, maintenance, matchesOwner],
+    () => maintenance.filter((item) => matchesOwner(carsById.get(item.carId)?.ownerId ?? '')),
+    [carsById, maintenance, matchesOwner],
   )
   const editableCars = useMemo(
     () => visibleCars.filter((car) => canEditCar(profile, incomingInvites, car)),
     [incomingInvites, profile, visibleCars],
   )
+  const filteredMaintenance = useMemo(() => {
+    const normalizedQuery = normalizeSearch(query)
+
+    return visibleMaintenance.filter((item) => {
+      const car = carsById.get(item.carId)
+      const matchesQuery =
+        normalizedQuery.length === 0 ||
+        [
+          item.description,
+          item.notes ?? '',
+          item.datePerformed,
+          item.serviceEndDate,
+          item.cost,
+          item.kmAtService ?? '',
+          getMaintenanceTypeLabel(item.type),
+          car?.brand ?? '',
+          car?.model ?? '',
+          car?.licensePlate ?? '',
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(normalizedQuery)
+      const matchesType = typeFilter === 'all' || item.type === typeFilter
+      const matchesAvailability =
+        availabilityFilter === 'all' ||
+        (availabilityFilter === 'blocks' && item.blocksAvailability) ||
+        (availabilityFilter === 'non_blocks' && !item.blocksAvailability)
+
+      return matchesQuery && matchesType && matchesAvailability
+    })
+  }, [availabilityFilter, carsById, query, typeFilter, visibleMaintenance])
   const sortedMaintenance = useMemo(
     () =>
-      [...visibleMaintenance].sort((first, second) => {
+      [...filteredMaintenance].sort((first, second) => {
         if (first.datePerformed !== second.datePerformed) {
           return second.datePerformed.localeCompare(first.datePerformed)
         }
 
         return second.createdAt.localeCompare(first.createdAt)
       }),
-    [visibleMaintenance],
+    [filteredMaintenance],
   )
+  const hasActiveFilters = Boolean(query.trim()) || typeFilter !== 'all' || availabilityFilter !== 'all'
 
   const form = useForm<MaintenanceValues, unknown, MaintenanceSubmitValues>({
     resolver: zodResolver(maintenanceSchema),
@@ -151,8 +193,54 @@ export function MaintenancePage() {
         }
       />
 
+      <Card>
+        <CardContent className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,180px)_minmax(0,210px)_auto]">
+          <SearchInput value={query} onChange={setQuery} placeholder="Cauta dupa masina, titlu, note..." />
+          <select
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value as MaintenanceTypeFilter)}
+            className="h-11 rounded-2xl border bg-card px-4 text-sm"
+          >
+            <option value="all">Toate tipurile</option>
+            <option value="repair">Reparatii</option>
+            <option value="investment">Investitii</option>
+            <option value="other">Altele</option>
+          </select>
+          <select
+            value={availabilityFilter}
+            onChange={(event) => setAvailabilityFilter(event.target.value as MaintenanceAvailabilityFilter)}
+            className="h-11 rounded-2xl border bg-card px-4 text-sm"
+          >
+            <option value="all">Toate interventiile</option>
+            <option value="blocks">Scoate masina din circuit</option>
+            <option value="non_blocks">Nu blocheaza masina</option>
+          </select>
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11"
+              onClick={() => {
+                setQuery('')
+                setTypeFilter('all')
+                setAvailabilityFilter('all')
+              }}
+            >
+              Reseteaza
+            </Button>
+          ) : null}
+        </CardContent>
+      </Card>
+
       {sortedMaintenance.length === 0 ? (
-        <EmptyState title="Nu exista reparatii" description="Adauga prima interventie pentru a incepe urmarirea costurilor." />
+        <EmptyState
+          title={visibleMaintenance.length === 0 ? 'Nu exista reparatii' : 'Nu am gasit reparatii'}
+          description={
+            visibleMaintenance.length === 0
+              ? 'Adauga prima interventie pentru a incepe urmarirea costurilor.'
+              : 'Incearca sa modifici filtrele sau cautarea.'
+          }
+        />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {sortedMaintenance.map((item) => {
