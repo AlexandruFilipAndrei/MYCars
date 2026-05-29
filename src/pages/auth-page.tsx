@@ -73,23 +73,23 @@ export function AuthPage() {
   })
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f6f3ed_0%,#ffffff_100%)] p-4">
+    <div className="min-h-screen p-4">
       <Toaster position="top-right" toastOptions={{ className: '!rounded-2xl !bg-card !text-foreground !border !border-border' }} />
 
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-5xl items-center justify-center">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-slate-950 text-white shadow-soft">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary text-primary-foreground shadow-soft">
               <CarFront className="h-7 w-7" />
             </div>
-            <p className="mt-4 font-display text-4xl font-bold tracking-tight text-slate-950">MYCars</p>
-            <p className="text-sm uppercase tracking-[0.28em] text-slate-500">Manage Your Cars</p>
-            <p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-slate-600">
+            <p className="mt-4 font-display text-4xl font-bold tracking-tight text-foreground">MYCars</p>
+            <p className="text-sm uppercase tracking-[0.28em] text-muted-foreground">Manage Your Cars</p>
+            <p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-muted-foreground">
               Administrează mașinile, documentele, închirierile și reparațiile într-un spațiu simplu și clar.
             </p>
           </div>
 
-          <Card className="border-white/40 bg-white/95 shadow-soft">
+          <Card className="border-border/70 bg-card/95 shadow-soft">
             <CardHeader>
               <CardTitle>{mode === 'login' ? 'Intră în cont' : 'Creează un cont nou'}</CardTitle>
               <CardDescription>

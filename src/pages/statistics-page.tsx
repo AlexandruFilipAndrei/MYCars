@@ -326,8 +326,8 @@ export function StatisticsPage() {
                 <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`} />
                 <Tooltip formatter={tooltipFormatter} />
                 <Legend />
-                <Bar dataKey="venituri" name="Venituri" fill="#2563eb" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="cheltuieli" name="Cheltuieli" fill="#f97316" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="venituri" name="Venituri" fill="hsl(var(--chart-income))" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="cheltuieli" name="Cheltuieli" fill="hsl(var(--chart-expense))" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -345,7 +345,7 @@ export function StatisticsPage() {
                 <XAxis dataKey="label" />
                 <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 1000)}k`} />
                 <Tooltip formatter={tooltipFormatter} />
-                <Line type="monotone" dataKey="profit" name="Profit" stroke="#16a34a" strokeWidth={3} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="profit" name="Profit" stroke="hsl(var(--chart-profit))" strokeWidth={3} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>

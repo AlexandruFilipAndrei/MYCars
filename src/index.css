@@ -6,56 +6,62 @@
 
 @layer base {
   :root {
-    --background: 42 33% 97%;
-    --foreground: 220 28% 12%;
+    --background: 73 73% 96%;
+    --foreground: 172 82% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 220 28% 12%;
+    --card-foreground: 172 82% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 28% 12%;
-    --primary: 214 78% 30%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 32 72% 92%;
-    --secondary-foreground: 220 28% 18%;
-    --muted: 38 32% 94%;
-    --muted-foreground: 220 14% 42%;
-    --accent: 28 100% 92%;
-    --accent-foreground: 21 82% 25%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --success: 145 63% 42%;
+    --popover-foreground: 172 82% 12%;
+    --primary: 172 96% 33%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 147 68% 71%;
+    --secondary-foreground: 172 82% 12%;
+    --muted: 73 73% 90%;
+    --muted-foreground: 172 28% 33%;
+    --accent: 147 68% 71%;
+    --accent-foreground: 172 82% 12%;
+    --destructive: 349 79% 26%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 172 96% 33%;
     --success-foreground: 0 0% 100%;
-    --warning: 36 92% 52%;
-    --warning-foreground: 220 28% 14%;
-    --border: 30 26% 86%;
-    --input: 30 22% 88%;
-    --ring: 214 78% 30%;
+    --warning: 29 79% 60%;
+    --warning-foreground: 20 72% 16%;
+    --border: 73 45% 80%;
+    --input: 73 45% 80%;
+    --ring: 172 96% 33%;
+    --chart-income: 172 96% 33%;
+    --chart-expense: 29 79% 74%;
+    --chart-profit: 147 68% 45%;
     --radius: 1rem;
   }
 
   .dark {
-    --background: 215 28% 9%;
-    --foreground: 35 38% 95%;
-    --card: 217 24% 13%;
-    --card-foreground: 35 38% 95%;
-    --popover: 217 24% 13%;
-    --popover-foreground: 35 38% 95%;
-    --primary: 30 94% 60%;
-    --primary-foreground: 220 28% 10%;
-    --secondary: 215 20% 18%;
-    --secondary-foreground: 35 38% 95%;
-    --muted: 216 18% 17%;
-    --muted-foreground: 216 12% 68%;
-    --accent: 215 18% 19%;
-    --accent-foreground: 35 38% 95%;
+    --background: 0 0% 8%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 96 57% 65%;
+    --primary-foreground: 0 0% 8%;
+    --secondary: 140 44% 26%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 68%;
+    --accent: 140 44% 26%;
+    --accent-foreground: 101 56% 88%;
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 98%;
-    --success: 146 58% 42%;
-    --success-foreground: 0 0% 100%;
-    --warning: 36 92% 56%;
-    --warning-foreground: 220 28% 10%;
-    --border: 217 16% 22%;
-    --input: 217 16% 22%;
-    --ring: 30 94% 60%;
+    --success: 96 57% 65%;
+    --success-foreground: 0 0% 8%;
+    --warning: 29 86% 66%;
+    --warning-foreground: 0 0% 8%;
+    --border: 0 0% 24%;
+    --input: 0 0% 24%;
+    --ring: 96 57% 65%;
+    --chart-income: 96 57% 65%;
+    --chart-expense: 29 79% 74%;
+    --chart-profit: 101 56% 72%;
   }
 
   * {
@@ -75,8 +81,14 @@
     min-height: 100vh;
     overflow-x: hidden;
     background-image:
-      radial-gradient(circle at top left, rgba(245, 158, 11, 0.16), transparent 28%),
-      radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 24%);
+      radial-gradient(circle at top left, rgba(3, 167, 145, 0.16), transparent 28%),
+      radial-gradient(circle at top right, rgba(241, 186, 136, 0.22), transparent 24%);
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(circle at top left, rgba(37, 95, 56, 0.22), transparent 28%),
+      radial-gradient(circle at top right, rgba(154, 216, 114, 0.08), transparent 24%);
   }
 
   #root {
@@ -96,7 +108,7 @@
 
 @layer components {
   .glass-panel {
-    @apply rounded-3xl border border-white/10 bg-white/70 shadow-soft backdrop-blur-xl dark:bg-slate-900/70;
+    @apply rounded-3xl border border-border/70 bg-card/80 shadow-soft backdrop-blur-xl;
   }
 
   .page-shell {

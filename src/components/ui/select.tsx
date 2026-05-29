@@ -35,7 +35,7 @@ export function SelectContent({
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
-        className={cn('z-50 rounded-2xl border bg-popover p-1 shadow-soft', className)}
+        className={cn('z-50 rounded-2xl border bg-popover p-1 text-popover-foreground shadow-soft', className)}
         {...props}
       >
         <SelectPrimitive.Viewport>{children}</SelectPrimitive.Viewport>
@@ -52,7 +52,7 @@ export function SelectItem({
   return (
     <SelectPrimitive.Item
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-xl py-2 pl-9 pr-3 text-sm outline-none focus:bg-muted',
+        'relative flex cursor-default select-none items-center rounded-xl py-2 pl-9 pr-3 text-sm outline-none focus:bg-accent focus:text-accent-foreground',
         className,
       )}
       {...props}
