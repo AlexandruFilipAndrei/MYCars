@@ -528,60 +528,60 @@ begin
     ('B-118-SDR','repair','Inlocuire baterie',480,-270,-269,false,65500,
       E'Baterie Rombat - 380 lei\nManopera - 100 lei'),
 
-    ('SB-77-MGN','repair','Distributie completa',1950,-515,-508,true,64200,
-      E'Kit distributie Gates - 850 lei\nPompa apa - 260 lei\nCurea accesorii - 130 lei\nAntigel - 110 lei\nManopera - 600 lei'),
+    ('SB-77-MGN','repair','Distributie completa',2600,-515,-508,true,64200,
+      E'Kit distributie Gates - 1000 lei\nPompa apa - 330 lei\nCurea accesorii - 170 lei\nRole accesorii - 250 lei\nAntigel - 150 lei\nManopera - 700 lei'),
 
-    ('CJ-63-OCT','repair','Curatare DPF si EGR',1900,-780,-777,false,103000,
-      E'Diagnoza - 100 lei\nCuratare EGR - 350 lei\nCuratare DPF - 700 lei\nSolutie curatare admisie - 150 lei\nManopera - 600 lei'),
+    ('CJ-63-OCT','repair','Curatare DPF si EGR',2800,-780,-777,false,103000,
+      E'Diagnoza - 150 lei\nCuratare EGR - 450 lei\nCuratare DPF - 900 lei\nClapeta admisie - 420 lei\nSolutie curatare admisie - 180 lei\nManopera - 700 lei'),
 
     ('IS-29-FAB','repair','Amortizoare fata schimbate',1100,-280,-278,false,39500,
       E'Amortizoare fata set 2 - 700 lei\nRulmenti tampon - 160 lei\nManopera - 240 lei'),
 
-    ('PH-52-PST','repair','Distributie si pompa apa',1850,-3,5,true,158700,
-      E'Kit distributie Gates - 780 lei\nPompa apa - 240 lei\nCurea accesorii - 110 lei\nAntigel - 90 lei\nManopera - 630 lei'),
-    ('PH-52-PST','repair','Reparatie turbina',2400,-660,-655,true,157200,
-      E'Turbina reconditionata - 1650 lei\nSet garnituri - 250 lei\nUlei si filtru - 200 lei\nManopera - 300 lei'),
+    ('PH-52-PST','repair','Distributie si pompa apa',3800,-3,5,true,158700,
+      E'Kit distributie Gates - 1200 lei\nPompa apa - 380 lei\nCurea accesorii - 180 lei\nAntigel - 140 lei\nSimeringuri - 300 lei\nManopera - 1600 lei'),
+    ('PH-52-PST','repair','Reparatie turbina',3600,-660,-655,true,157200,
+      E'Turbina reconditionata - 2350 lei\nSet garnituri - 300 lei\nUlei si filtru - 280 lei\nFurtun admisie - 220 lei\nManopera - 450 lei'),
 
     ('TM-84-GLF','repair','Senzor parcare si placute frana',950,-350,-348,false,76500,
       E'Senzor parcare spate - 320 lei\nPlacute frana spate - 280 lei\nManopera - 350 lei'),
 
     ('CT-16-COR','investment','Anvelope noi vara set 4',1550,-450,-448,false,88000,
       E'Anvelope Bridgestone set 4 - 1240 lei\nMontaj si echilibrare - 240 lei\nValve - 40 lei\nManopera - 30 lei'),
-    ('CT-16-COR','repair','Geometrie si jante indreptate',620,-40,-38,false,93000,
-      E'Geometrie fata - 250 lei\nJanta indreptata - 220 lei\nManopera - 150 lei'),
+    ('CT-16-COR','repair','Geometrie si jante indreptate',1700,-40,-38,false,93000,
+      E'Geometrie fata - 280 lei\nJante fata indreptate - 600 lei\nBieleta directie - 290 lei\nEchilibrare roti - 180 lei\nManopera - 350 lei'),
 
     ('BV-38-I30','repair','Climatizare incarcare freon si filtru',480,-585,-583,false,94500,
       E'Incarcare freon - 220 lei\nFiltru habitaclu carbon - 120 lei\nManopera - 140 lei'),
-    ('BV-38-I30','other','Revizie ulei si filtre',450,-140,-139,false,100900,
-      E'Ulei Motul 5W30 4L - 210 lei\nFiltru ulei - 40 lei\nFiltru aer - 60 lei\nManopera - 140 lei'),
+    ('BV-38-I30','other','Revizie ulei si filtre',900,-140,-139,false,100900,
+      E'Ulei Motul 5W30 4L - 250 lei\nFiltru ulei - 40 lei\nFiltru aer - 70 lei\nFiltru habitaclu - 120 lei\nIgienizare AC - 160 lei\nManopera - 260 lei'),
 
-    ('DB-91-TCS','investment','Anvelope iarna set 4',2100,-230,-228,false,43500,
-      E'Anvelope Continental iarna set 4 - 1700 lei\nMontaj si echilibrare - 260 lei\nValve - 40 lei\nManopera - 100 lei'),
+    ('DB-91-TCS','investment','Anvelope iarna set 4',2800,-230,-228,false,43500,
+      E'Anvelope Continental iarna set 4 - 2200 lei\nMontaj si echilibrare - 300 lei\nValve - 80 lei\nDepozitare sezon - 120 lei\nManopera - 100 lei'),
 
     ('GL-27-CED','repair','Senzor presiune anvelope si placute frana',890,-515,-513,false,33800,
       E'Senzori presiune anvelope set - 380 lei\nPlacute frana fata - 240 lei\nManopera - 270 lei'),
 
-    ('MS-59-FCS','repair','Inlocuire ambreiaj si volanta bimasa',2350,-745,-740,true,129500,
-      E'Kit ambreiaj Sachs - 1500 lei\nVolanta bimasa - 600 lei\nUlei cutie - 150 lei\nManopera - 100 lei'),
-    ('MS-59-FCS','repair','Placute si discuri frana',850,-160,-158,false,133800,
-      E'Placute frana fata - 240 lei\nDiscuri frana fata - 460 lei\nManopera - 150 lei'),
+    ('MS-59-FCS','repair','Inlocuire ambreiaj si volanta bimasa',3800,-745,-740,true,129500,
+      E'Kit ambreiaj Sachs - 1500 lei\nVolanta bimasa - 1450 lei\nUlei cutie - 250 lei\nManopera - 600 lei'),
+    ('MS-59-FCS','repair','Placute si discuri frana',1900,-160,-158,false,133800,
+      E'Placute frana fata - 300 lei\nDiscuri frana fata - 650 lei\nEtrier reconditionat - 450 lei\nLichid frana - 120 lei\nManopera - 380 lei'),
 
     ('BH-14-AST','repair','Inlocuire baterie si diagnoza',700,-480,-478,false,103200,
       E'Diagnoza - 100 lei\nBaterie Bosch - 480 lei\nManopera - 120 lei'),
 
-    ('B-733-BMW','repair','Placute si discuri frana fata/spate',1650,-790,-785,false,118600,
-      E'Placute fata ATE - 320 lei\nDiscuri fata ATE - 520 lei\nPlacute spate - 260 lei\nDiscuri spate - 380 lei\nManopera - 170 lei'),
-    ('B-733-BMW','investment','Anvelope noi vara set 4 premium',2400,-270,-268,false,120800,
-      E'Anvelope Michelin Pilot Sport set 4 - 2000 lei\nMontaj si echilibrare - 300 lei\nValve - 40 lei\nManopera - 60 lei'),
+    ('B-733-BMW','repair','Placute si discuri frana fata/spate',2600,-790,-785,false,118600,
+      E'Placute fata ATE - 450 lei\nDiscuri fata ATE - 800 lei\nPlacute spate - 350 lei\nDiscuri spate - 600 lei\nSenzori uzura - 120 lei\nManopera - 280 lei'),
+    ('B-733-BMW','investment','Anvelope noi vara set 4 premium',3600,-270,-268,false,120800,
+      E'Anvelope Michelin Pilot Sport set 4 - 3000 lei\nMontaj si echilibrare - 320 lei\nValve - 80 lei\nGeometrie - 200 lei'),
 
-    ('VL-22-CVC','repair','Revizie ulei, filtre si placute frana',980,-360,-358,false,84000,
-      E'Ulei Motul 5W30 4L - 220 lei\nFiltru ulei - 35 lei\nFiltru aer - 55 lei\nPlacute frana fata - 260 lei\nManopera - 410 lei'),
+    ('VL-22-CVC','repair','Revizie ulei, filtre si placute frana',1500,-360,-358,false,84000,
+      E'Ulei Motul 5W30 4L - 250 lei\nFiltru ulei - 40 lei\nFiltru aer - 70 lei\nPlacute frana fata - 360 lei\nLichid frana - 120 lei\nDiagnoza suspensie - 200 lei\nManopera - 460 lei'),
 
-    ('BR-08-308','repair','Cutie viteze si ambreiaj verificate, reparatii minore',1300,-420,-415,false,146500,
-      E'Verificare cutie viteze - 300 lei\nAmbreiaj ajustat - 600 lei\nManopera - 400 lei'),
+    ('BR-08-308','repair','Cutie viteze si ambreiaj verificate, reparatii minore',2300,-420,-415,false,146500,
+      E'Verificare cutie viteze - 350 lei\nKit ambreiaj - 950 lei\nUlei cutie - 300 lei\nTampon cutie - 250 lei\nManopera - 450 lei'),
 
-    ('BC-46-LEN','repair','Cutie de viteze cu probleme, reparatie partiala',1750,-150,-145,false,161000,
-      E'Diagnoza cutie viteze - 150 lei\nSincronizator treapta 2 - 700 lei\nUlei cutie - 300 lei\nManopera - 600 lei'),
+    ('BC-46-LEN','repair','Cutie de viteze cu probleme, reparatie partiala',6500,-150,-145,false,161000,
+      E'Diagnoza cutie viteze - 250 lei\nSincronizator treapta 2 - 1200 lei\nKit ambreiaj - 1100 lei\nVolanta - 1600 lei\nUlei cutie - 350 lei\nManopera - 2000 lei'),
 
     ('CJ-11-SDR','other','Revizie ulei si filtre',380,-280,-279,false,59000,
       E'Ulei 4L - 180 lei\nFiltru ulei - 35 lei\nManopera - 165 lei'),
