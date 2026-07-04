@@ -299,7 +299,7 @@ export function StatisticsPage() {
               <SelectTrigger>
                 <SelectValue placeholder="Alege perioada" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[min(320px,70vh)] overflow-y-auto">
                 <SelectItem value="last-6">Ultimele 6 luni</SelectItem>
                 {years.map((year) => (
                   <SelectItem key={year} value={`year:${year}`}>

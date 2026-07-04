@@ -14,10 +14,10 @@
 -- 1. Create the 4 auth accounts first (Supabase Studio or the app sign-up
 --    flow) with exactly these emails. Profiles are created automatically by
 --    the on_auth_user_created trigger - this script never touches auth.users.
---      owner@mycars-demo.ro
---      viewer@mycars-demo.ro
---      editor@mycars-demo.ro
---      operator@mycars-demo.ro
+--      owner@mycars.ro
+--      viewer@mycars.ro
+--      editor@mycars.ro
+--      operator@mycars.ro
 -- 2. Set run_delete_only below (false = normal run, true = cleanup only).
 -- 3. Run this whole file in the Supabase SQL editor.
 --
@@ -54,10 +54,10 @@ do $$
 declare
   run_delete_only boolean := false;
 
-  owner_email    text := 'owner@mycars-demo.ro';
-  viewer_email   text := 'viewer@mycars-demo.ro';
-  editor_email   text := 'editor@mycars-demo.ro';
-  operator_email text := 'operator@mycars-demo.ro';
+  owner_email    text := 'owner@mycars.ro';
+  viewer_email   text := 'viewer@mycars.ro';
+  editor_email   text := 'editor@mycars.ro';
+  operator_email text := 'operator@mycars.ro';
 
   owner_profile_id    uuid;
   viewer_profile_id   uuid;
@@ -174,39 +174,39 @@ begin
       now()
     from (values
       -- account, license_plate, brand, model, year, color, engine_hp, engine_displacement, transmission, chassis_number, category, purchase_price, annual_insurance_cost, current_km, notes, created_offset, archived_offset
-      ('owner','B-201-LGN','Dacia','Logan',2019,'Alb',90,999,'manual','UU1LSDC5XKL284193','rent',6900,1300,128500,'far stanga fisurat, se aburesc geamurile des',-890,null::int),
+      ('owner','B-201-LGN','Dacia','Logan',2019,'Alb',90,999,'manual','UU1LSDC5XKL284193','rent',6900,1300,128500,'far stanga fisurat',-890,null::int),
       ('owner','B-118-SDR','Dacia','Sandero',2021,'Gri',90,999,'manual','UU1SDCB5FL3412075','bolt',8200,1450,71200,'volan tremura usor peste 100 km/h',-520,null),
       ('owner','AG-45-DST','Dacia','Duster',2020,'Portocaliu',115,1461,'manual','UU1HSDCV6ML556812','personal',12100,1500,54300,'portbagaj nu se inchide corect, geam electric spate blocat',-610,null),
-      ('owner','SB-77-MGN','Renault','Megane',2021,'Albastru',115,1461,'manual','VF1RFA1CFN2298341','rent',11800,1750,68900,'zgarietura adanca aripa dreapta spate',-760,null),
-      ('owner','CJ-63-OCT','Skoda','Octavia',2020,'Gri',150,1968,'automatic','TMBJJ7NE9MZ209156','rent',15600,2150,112400,'consum mare fata de normal, posibil injectoare',-840,null),
-      ('owner','IS-29-FAB','Skoda','Fabia',2022,'Rosu',95,999,'manual','TMBGEJ5AB0X184527','bolt',9700,1600,42800,'amortizoare fata zgomotoase pe denivelari',-380,null),
-      ('owner','PH-52-PST','Volkswagen','Passat',2019,'Negru',150,1968,'automatic','WVWZZZ3CZLE471029','service_replacement',13900,3100,158700,'in service pentru distributie, nu e disponibila',-900,null),
+      ('owner','SB-77-MGN','Renault','Megane',2021,'Albastru',115,1461,'manual','VF1RFA1CFN2298341','rent',11800,1750,68900,'aripa dreapta spate zgariata',-760,null),
+      ('owner','CJ-63-OCT','Skoda','Octavia',2020,'Gri',150,1968,'automatic','TMBJJ7NE9MZ209156','rent',15600,2150,112400,'vopsea matuita capota',-840,null),
+      ('owner','IS-29-FAB','Skoda','Fabia',2022,'Rosu',95,999,'manual','TMBGEJ5AB0X184527','bolt',9700,1600,42800,'troncane fata pe denivelari',-380,null),
+      ('owner','PH-52-PST','Volkswagen','Passat',2019,'Negru',150,1968,'automatic','WVWZZZ3CZLE471029','service_replacement',13900,3100,158700,'zgomot distrubutie la rece',-900,null),
       ('owner','TM-84-GLF','Volkswagen','Golf',2021,'Negru',116,1498,'automatic','WVWZZZ1KZAM623847','uber',14300,2250,79600,'senzor parcare spate defect',-560,null),
-      ('owner','CT-16-COR','Toyota','Corolla',2020,'Alb perlat',122,1798,'automatic','NMTBZ3BE81T042563','bolt',16800,2400,93100,'jante fata indoite usor, vibratie la viteza',-470,null),
-      ('owner','BV-38-I30','Hyundai','i30',2020,'Argintiu',120,1368,'manual','TMAD391AAMZ842137','rent',10600,1650,101300,'climatizare cu miros neplacut la pornire',-680,null),
-      ('owner','DB-91-TCS','Hyundai','Tucson',2022,'Negru',150,1598,'automatic','TMAD681BBNX532984','rent',21900,3350,48700,'cauciucuri de iarna montate, uzura avansata',-240,null),
-      ('owner','GL-27-CED','Kia','Ceed',2022,'Rosu',140,1353,'automatic','U5YFF24219L847362','bolt',16200,2200,39500,'zgarieturi multiple pe bara spate',-300,null),
-      ('owner','MS-59-FCS','Ford','Focus',2019,'Alb',125,998,'manual','WF0AXXWPMBF529314','rent',8600,1550,134200,'ambreiaj tine sus, posibil de schimbat curand',-910,null),
-      ('owner','BH-14-AST','Opel','Astra',2020,'Alb',110,1496,'manual','W0LPF6EDX9AH73824','rent',9900,1600,108900,'baterie slaba, pornire dificila dimineata',-720,null),
-      ('owner','B-733-BMW','BMW','Seria 3',2019,'Albastru inchis',190,1995,'automatic','WBA8E9C51HL739246','general',23800,3950,121600,'scaun sofer uzat, tapiterie decolorata',-850,null),
+      ('owner','CT-16-COR','Toyota','Corolla',2020,'Alb perlat',122,1798,'automatic','NMTBZ3BE81T042563','bolt',16800,2400,93100,'jante fata indoite usor, vibreaza la viteza',-470,null),
+      ('owner','BV-38-I30','Hyundai','i30',2020,'Argintiu',120,1368,'manual','TMAD391AAMZ842137','rent',10600,1650,101300,'anvelope vara goodyear dot 2024',-680,null),
+      ('owner','DB-91-TCS','Hyundai','Tucson',2022,'Negru',150,1598,'automatic','TMAD681BBNX532984','rent',21900,3350,48700,'usa spate dreapta revopsita',-240,null),
+      ('owner','GL-27-CED','Kia','Ceed',2022,'Rosu',140,1353,'automatic','U5YFF24219L847362','bolt',16200,2200,39500,'zgarieturi pe bara spate',-300,null),
+      ('owner','MS-59-FCS','Ford','Focus',2019,'Alb',125,998,'manual','WF0AXXWPMBF529314','rent',8600,1550,134200,'ambreiaj tine sus',-910,null),
+      ('owner','BH-14-AST','Opel','Astra',2020,'Alb',110,1496,'manual','W0LPF6EDX9AH73824','rent',9900,1600,108900,'baterie slaba, porneste greu dimineata',-720,null),
+      ('owner','B-733-BMW','BMW','Seria 3',2019,'Albastru inchis',190,1995,'automatic','WBA8E9C51HL739246','general',23800,3950,121600,'scaun sofer uzat',-850,null),
       ('owner','VL-22-CVC','Honda','Civic',2020,'Alb',182,1498,'manual','SHHFK2841HV682359','uber',17400,2350,86300,'zgomot suspensie fata la viraje',-430,null),
       ('owner','BR-08-308','Peugeot','308',2017,'Gri inchis',130,1499,'automatic','VF3CBHZAP2Z619384','personal',11600,1800,149800,'vanduta, kilometraj mare si reparatii dese',-1400,-270),
       ('owner','BC-46-LEN','Seat','Leon',2018,'Alb',150,1498,'manual','VSSZZZ4HZFS618273','general',12900,1850,162300,'scoasa din flota, cutie de viteze cu probleme',-1250,-55),
 
       ('viewer','CJ-11-SDR','Dacia','Sandero',2020,'Alb',90,999,'manual','UU1SDCA3EL2984716','personal',7600,1350,61200,'far dreapta condensat',-310,null),
-      ('viewer','CJ-52-CLI','Renault','Clio',2019,'Gri',90,1461,'manual','VF1CPB1FL28419375','rent',7100,1300,88400,'bara fata zgariata usor',-480,null),
+      ('viewer','CJ-52-CLI','Renault','Clio',2019,'Gri',90,1461,'manual','VF1CPB1FL28419375','rent',7100,1300,88400,'bara fata zgariata',-480,null),
       ('viewer','CJ-77-FAB','Skoda','Fabia',2018,'Albastru',90,999,'manual','TMBGEJ4AH2X371956','rent',6800,1550,97600,'geam spate stanga merge greu',-560,null),
-      ('viewer','CJ-34-COR','Opel','Corsa',2019,'Alb',90,1398,'manual','W0LPF5FDX8AG42163','personal',6400,1300,72300,'oglinda stanga crapata',-390,null),
+      ('viewer','CJ-34-COR','Opel','Corsa',2019,'Alb',90,1398,'manual','W0LPF5FDX8AG42163','personal',6400,1300,72300,'oglinda dreapta crapata',-390,null),
       ('viewer','CJ-19-FST','Ford','Fiesta',2018,'Rosu',100,1499,'manual','WF0AXXWTKAG583172','general',6200,1350,104900,'in service pentru cauciucuri si frane',-430,null),
 
-      ('editor','TM-22-YRS','Toyota','Yaris',2021,'Alb',100,1490,'automatic','NMTBZ1BE72T841563','bolt',12400,1650,47800,'aer conditionat porneste greu',-350,null),
+      ('editor','TM-22-YRS','Toyota','Yaris',2021,'Alb',100,1490,'automatic','NMTBZ1BE72T841563','bolt',12400,1650,47800,'aer conditionat raceste greu',-350,null),
       ('editor','TM-63-I20','Hyundai','i20',2020,'Argintiu',100,1248,'manual','TMAD451BCPY628347','uber',9800,1600,68200,'zgarietura usa sofer',-410,null),
       ('editor','TM-08-RPD','Skoda','Rapid',2019,'Gri',90,999,'manual','TMBNJ2AE63Z481952','rent',6900,1550,92100,'consola centrala zgariata',-520,null),
       ('editor','TM-91-LGN','Dacia','Logan',2018,'Alb',90,999,'manual','UU1LSDB4FK1738296','rent',6300,1250,118700,'far ceata stanga nefunctional',-600,null),
       ('editor','TM-45-PLO','Volkswagen','Polo',2020,'Negru',95,999,'manual','WVWZZZ6RZAW295184','personal',10200,1550,56400,'covorase lipsa, interior uzat',-280,null),
 
-      ('operator','CT-14-LGN','Dacia','Logan',2017,'Alb',75,1198,'manual','UU1LSDA2EH9361728','rent',5600,1200,156800,'bara spate desprinsa partial',-640,null),
-      ('operator','CT-58-CLI','Renault','Clio',2018,'Gri',90,1461,'manual','VF1CPB2GM38416579','bolt',6700,1300,89300,'scaun spate pata neagra',-470,null),
+      ('operator','CT-14-LGN','Dacia','Logan',2017,'Alb',75,1198,'manual','UU1LSDA2EH9361728','rent',5600,1200,156800,'bara spate infundata',-640,null),
+      ('operator','CT-58-CLI','Renault','Clio',2018,'Gri',90,1461,'manual','VF1CPB2GM38416579','bolt',6700,1300,89300,'bancheta patata',-470,null),
       ('operator','CT-27-COR','Opel','Corsa',2017,'Alb',90,1398,'manual','W0LPF4FDT7AH52963','rent',5900,1250,138200,'cauciuc fata dreapta uzat',-380,null),
       ('operator','CT-73-FST','Ford','Fiesta',2019,'Albastru',100,1499,'manual','WF0AXXWTLBH471938','uber',7300,1450,76500,'in service pentru placute frana',-330,null),
       ('operator','CT-36-I10','Hyundai','i10',2019,'Rosu',67,998,'manual','TMAD271DDNZ843617','personal',6100,1200,53700,'geam electric fata dreapta lent',-290,null)
@@ -349,23 +349,23 @@ begin
 
   insert into seed_rentals_raw (renter_cnp, license_plate, renter_name, renter_surname, start_offset, end_offset, status, advance_payment, notes, km_start, km_end, price_per_unit, price_unit) values
     -- ===== OWNER (38 rentals: 3 active, 2 cancelled, 33 completed) =====
-    ('1000000000001','B-201-LGN','Andrei','Popescu',-650,-636,'completed',450,'cauciuc de rezerva lipsa',125000,125650,145,'day'),
+    ('1000000000001','B-201-LGN','Andrei','Popescu',-650,-636,'completed',450,'roata de rezerva lipsa',125000,125650,145,'day'),
     ('1000000000002','B-201-LGN','Mihai','Ionescu',-95,-85,'completed',400,'far ceata dreapta abureste',127800,128300,155,'day'),
 
     ('1000000000003','B-118-SDR','Ioana','Dumitrescu',-580,-560,'completed',900,'zgarietura portiera stanga spate',60000,61050,150,'day'),
     ('1000000000004','B-118-SDR','Alexandru','Stan',-250,-230,'completed',1000,'geam electric spate lent',66000,67100,165,'day'),
     ('1000000000005','B-118-SDR','Cristina','Marin',-40,-25,'completed',700,'oglinda dreapta zgariata',70500,71200,175,'day'),
 
-    ('1000000000006','SB-77-MGN','Radu','Georgescu',-500,-478,'completed',1450,'zgarietura adanca aripa fata',65000,66200,190,'week'),
-    ('1000000000007','SB-77-MGN','Elena','Ilie',-6,9,'active',900,'zgarietura adanca aripa dreapta spate',68900,null,210,'day'),
+    ('1000000000006','SB-77-MGN','Radu','Georgescu',-500,-478,'completed',1450,'zgarietura aripa fata',65000,66200,190,'week'),
+    ('1000000000007','SB-77-MGN','Elena','Ilie',-6,9,'active',900,'zgarietura aripa dreapta spate',68900,null,210,'day'),
 
-    ('1000000000008','CJ-63-OCT','Vlad','Tudor',-820,-790,'completed',2600,'consum mare, posibil injectoare',100000,102400,900,'week'),
+    ('1000000000008','CJ-63-OCT','Vlad','Tudor',-820,-790,'completed',2600,'torpedou nefunctional',100000,102400,900,'week'),
     ('1000000000009','CJ-63-OCT','Diana','Nistor',-150,-135,'completed',900,'zgomot suspensie spate',109000,110100,230,'day'),
 
     ('1000000000010','IS-29-FAB','Sorin','Balan',-300,-286,'completed',600,'amortizoare zgomotoase pe denivelari',38000,38700,160,'day'),
     ('1000000000011','IS-29-FAB','Gabriela','Enache',-4,6,'active',400,'far stanga condensat',42800,null,170,'day'),
 
-    ('1000000000012','PH-52-PST','Florin','Barbu',-700,-670,'completed',1900,'consum mare motorina, fum la accelerare',150000,152800,1900,'month'),
+    ('1000000000012','PH-52-PST','Florin','Barbu',-700,-670,'completed',1900,'mecanic ok',150000,152800,1900,'month'),
 
     ('1000000000013','TM-84-GLF','Ramona','Dragomir',-430,-410,'completed',1300,'senzor parcare spate defect',74000,75100,240,'day'),
     ('1000000000014','TM-84-GLF','Bogdan','Constantin',-70,-60,'cancelled',0,'rezervare anulata, client nu s-a prezentat',null,null,255,'day'),
@@ -374,29 +374,29 @@ begin
     ('1000000000016','CT-16-COR','Catalin','Neagu',-280,-260,'completed',1300,'vibratie usoara la viteza mare',90000,91200,245,'day'),
     ('1000000000017','CT-16-COR','Andrei','Popescu',-60,-45,'completed',1000,'cauciuc fata dreapta uzat',92500,93100,260,'day'),
 
-    ('1000000000018','BV-38-I30','Mihai','Ionescu',-610,-590,'completed',900,'climatizare cu miros la pornire',94000,95300,165,'day'),
+    ('1000000000018','BV-38-I30','Mihai','Ionescu',-610,-590,'completed',900,'climatizare defecta',94000,95300,165,'day'),
     ('1000000000019','BV-38-I30','Ioana','Dumitrescu',-160,-145,'completed',700,'geam spate stanga greu',99800,100700,175,'day'),
 
-    ('1000000000020','DB-91-TCS','Alexandru','Stan',-220,-195,'completed',2200,'cauciucuri iarna montate, uzura avansata',44000,46800,305,'day'),
-    ('1000000000021','DB-91-TCS','Cristina','Marin',-60,-40,'completed',1900,'senzor presiune anvelope eronat',47200,48200,335,'day'),
-    ('1000000000022','DB-91-TCS','Radu','Georgescu',-8,22,'active',2500,'cauciucuri de iarna montate, uzura avansata',48700,null,345,'day'),
+    ('1000000000020','DB-91-TCS','Alexandru','Stan',-220,-195,'completed',2200,'cauciucuri iarna michelin dot 2025',44000,46800,305,'day'),
+    ('1000000000021','DB-91-TCS','Cristina','Marin',-60,-40,'completed',1900,'senzor presiune anvelope stricat',47200,48200,335,'day'),
+    ('1000000000022','DB-91-TCS','Radu','Georgescu',-8,22,'active',2500,'jante zgariate',48700,null,345,'day'),
 
     ('1000000000023','GL-27-CED','Elena','Ilie',-540,-520,'completed',1400,'zgarieturi bara spate',32000,33100,210,'day'),
     ('1000000000024','GL-27-CED','Vlad','Tudor',-220,-205,'completed',1050,'far dreapta condensat',36000,36700,240,'day'),
     ('1000000000025','GL-27-CED','Diana','Nistor',-35,-22,'completed',950,'jante zgariate fata',38900,39500,255,'day'),
 
-    ('1000000000026','MS-59-FCS','Sorin','Balan',-770,-750,'completed',900,'ambreiaj tine sus',128000,129200,150,'day'),
+    ('1000000000026','MS-59-FCS','Sorin','Balan',-770,-750,'completed',900,'ambreiajul tine sus',128000,129200,150,'day'),
     ('1000000000027','MS-59-FCS','Gabriela','Enache',-180,-170,'completed',450,'zgomot motor la ralanti',132500,133100,160,'day'),
 
     ('1000000000028','BH-14-AST','Florin','Barbu',-500,-485,'completed',600,'baterie slaba, pornire dificila',102000,102900,145,'day'),
     ('1000000000029','BH-14-AST','Ramona','Dragomir',-18,-10,'cancelled',0,'rezervare anulata de client inainte de predare',null,null,150,'day'),
 
     ('1000000000030','B-733-BMW','Bogdan','Constantin',-830,-800,'completed',6200,'scaun sofer uzat',115000,118200,1800,'week'),
-    ('1000000000031','B-733-BMW','Simona','Voicu',-300,-280,'completed',2600,'tapiterie decolorata pe bord',119500,121300,370,'day'),
+    ('1000000000031','B-733-BMW','Simona','Voicu',-300,-280,'completed',2600,'tapiterie desprinsa pe bord',119500,121300,370,'day'),
     ('1000000000032','B-733-BMW','Catalin','Neagu',-50,-35,'completed',1900,'zgomot suspensie fata la viraje',121600,122900,380,'day'),
 
     ('1000000000033','VL-22-CVC','Andrei','Popescu',-390,-370,'completed',1750,'zgomot suspensie fata la denivelari',82000,83400,260,'day'),
-    ('1000000000034','VL-22-CVC','Mihai','Ionescu',-75,-60,'completed',1350,'ambreiaj usor dur',85700,86300,270,'day'),
+    ('1000000000034','VL-22-CVC','Mihai','Ionescu',-75,-60,'completed',1350,'ambreiajul usor tare',85700,86300,270,'day'),
 
     ('1000000000035','BR-08-308','Ioana','Dumitrescu',-900,-880,'completed',1200,'kilometraj mare, suspensie zgomotoasa',140000,141200,180,'day'),
     ('1000000000036','BR-08-308','Alexandru','Stan',-400,-385,'completed',900,'reparatii frecvente, consum mare',148000,149000,185,'day'),
@@ -405,19 +405,19 @@ begin
     ('1000000000038','BC-46-LEN','Radu','Georgescu',-200,-180,'completed',1350,'zgomot cutie de viteze',160500,161900,195,'day'),
 
     -- ===== VIEWER (10 rentals: 1 active, 1 cancelled, 8 completed) =====
-    ('1000000000039','CJ-52-CLI','Elena','Ilie',-520,-505,'completed',550,'bara fata zgariata usor',80000,80900,120,'day'),
-    ('1000000000040','CJ-52-CLI','Vlad','Tudor',-250,-238,'completed',450,'geam electric fata lent',84500,85200,130,'day'),
-    ('1000000000041','CJ-52-CLI','Diana','Nistor',-60,-50,'completed',400,'oglinda stanga crapata',87800,88400,135,'day'),
+    ('1000000000039','CJ-52-CLI','Elena','Ilie',-520,-505,'completed',550,'bara fata zgariata usor',80000,80900,112,'day'),
+    ('1000000000040','CJ-52-CLI','Vlad','Tudor',-250,-238,'completed',450,'geam electric fata lent',84500,85200,120,'day'),
+    ('1000000000041','CJ-52-CLI','Diana','Nistor',-60,-50,'completed',400,'oglinda stanga crapata',87800,88400,125,'day'),
     ('1000000000042','CJ-52-CLI','Sorin','Balan',-15,-8,'cancelled',0,'rezervare anulata inainte de predare',null,null,125,'day'),
 
-    ('1000000000043','CJ-77-FAB','Gabriela','Enache',-400,-385,'completed',500,'geam spate stanga greu',91000,91900,115,'day'),
-    ('1000000000044','CJ-77-FAB','Florin','Barbu',-100,-88,'completed',400,'far dreapta condensat',95500,96300,120,'day'),
-    ('1000000000045','CJ-77-FAB','Ramona','Dragomir',-5,8,'active',350,'geam spate stanga merge greu',97600,null,125,'day'),
+    ('1000000000043','CJ-77-FAB','Gabriela','Enache',-400,-385,'completed',500,'geam spate stanga greu',91000,91900,108,'day'),
+    ('1000000000044','CJ-77-FAB','Florin','Barbu',-100,-88,'completed',400,'far dreapta condensat',95500,96300,112,'day'),
+    ('1000000000045','CJ-77-FAB','Ramona','Dragomir',-5,8,'active',350,'geam spate stanga merge greu',97600,null,116,'day'),
 
-    ('1000000000046','CJ-34-COR','Bogdan','Constantin',-350,-338,'completed',380,'oglinda stanga crapata',65000,65700,110,'day'),
-    ('1000000000047','CJ-34-COR','Simona','Voicu',-90,-80,'completed',330,'far dreapta condensat',70500,71100,115,'day'),
+    ('1000000000046','CJ-34-COR','Bogdan','Constantin',-350,-338,'completed',380,'oglinda stanga crapata',65000,65700,104,'day'),
+    ('1000000000047','CJ-34-COR','Simona','Voicu',-90,-80,'completed',330,'far dreapta condensat',70500,71100,108,'day'),
 
-    ('1000000000048','CJ-19-FST','Catalin','Neagu',-420,-408,'completed',350,'geam electric fata greu',98000,98700,108,'day'),
+    ('1000000000048','CJ-19-FST','Catalin','Neagu',-420,-408,'completed',350,'geam electric fata greu',98000,98700,102,'day'),
 
     -- ===== EDITOR (9 rentals: 1 active, 1 cancelled, 7 completed) =====
     ('1000000000049','TM-22-YRS','Andrei','Popescu',-300,-288,'completed',430,'aer conditionat porneste greu',40000,40800,130,'day'),
@@ -434,16 +434,16 @@ begin
     ('1000000000057','TM-91-LGN','Diana','Nistor',-20,-14,'cancelled',0,'rezervare anulata de client',null,null,108,'day'),
 
     -- ===== OPERATOR (8 rentals: 1 active, 1 cancelled, 6 completed) =====
-    ('1000000000058','CT-14-LGN','Sorin','Balan',-480,-465,'completed',350,'bara spate desprinsa partial',145000,145850,95,'day'),
-    ('1000000000059','CT-14-LGN','Gabriela','Enache',-140,-128,'completed',300,'far stanga fisurat',152000,152700,100,'day'),
+    ('1000000000058','CT-14-LGN','Sorin','Balan',-480,-465,'completed',350,'bara spate desprinsa partial',145000,145850,110,'day'),
+    ('1000000000059','CT-14-LGN','Gabriela','Enache',-140,-128,'completed',300,'far stanga fisurat',152000,152700,110,'day'),
 
-    ('1000000000060','CT-58-CLI','Florin','Barbu',-400,-388,'completed',320,'scaun spate pata neagra',78000,78650,105,'day'),
-    ('1000000000061','CT-58-CLI','Ramona','Dragomir',-90,-80,'completed',280,'zgarietura usa dreapta',85500,86100,110,'day'),
+    ('1000000000060','CT-58-CLI','Florin','Barbu',-400,-388,'completed',320,'scaun spate pata neagra',78000,78650,115,'day'),
+    ('1000000000061','CT-58-CLI','Ramona','Dragomir',-90,-80,'completed',280,'zgarietura usa dreapta',85500,86100,120,'day'),
 
-    ('1000000000062','CT-27-COR','Bogdan','Constantin',-300,-285,'completed',350,'cauciuc fata dreapta uzat',128000,129100,90,'day'),
-    ('1000000000063','CT-27-COR','Simona','Voicu',-6,9,'active',250,'cauciuc fata dreapta uzat',138200,null,95,'day'),
+    ('1000000000062','CT-27-COR','Bogdan','Constantin',-300,-285,'completed',350,'cauciuc fata dreapta uzat',128000,129100,105,'day'),
+    ('1000000000063','CT-27-COR','Simona','Voicu',-6,9,'active',250,'cauciuc fata dreapta uzat',138200,null,110,'day'),
 
-    ('1000000000064','CT-73-FST','Catalin','Neagu',-250,-238,'completed',300,'geam electric fata dreapta lent',70000,70650,100,'day'),
+    ('1000000000064','CT-73-FST','Catalin','Neagu',-250,-238,'completed',300,'geam electric fata dreapta lent',70000,70650,115,'day'),
     ('1000000000065','CT-73-FST','Andrei','Popescu',-25,-18,'cancelled',0,'rezervare anulata inainte de predare',null,null,102,'day');
 
   with inserted_rentals as (
@@ -587,14 +587,14 @@ begin
       E'Ulei 4L - 180 lei\nFiltru ulei - 35 lei\nManopera - 165 lei'),
     ('CJ-52-CLI','repair','Placute frana fata',420,-230,-228,false,83000,
       E'Placute frana ATE - 260 lei\nManopera - 160 lei'),
-    ('CJ-77-FAB','repair','Amortizoare spate zgomotoase, schimbate',950,-370,-368,false,92500,
-      E'Amortizoare spate set 2 - 650 lei\nManopera - 300 lei'),
+    ('CJ-77-FAB','repair','Amortizoare spate zgomotoase, schimbate',1180,-370,-368,false,92500,
+      E'Amortizoare spate set 2 - 820 lei\nManopera - 360 lei'),
     ('CJ-34-COR','repair','Oglinda retrovizoare inlocuita',340,-330,-329,false,65900,
       E'Oglinda stanga completa - 260 lei\nManopera - 80 lei'),
-    ('CJ-19-FST','repair','Cauciucuri si placute frana',980,-2,6,true,104900,
-      E'Anvelope Barum 2 buc - 480 lei\nPlacute frana fata - 190 lei\nManopera montaj - 150 lei\nEchilibrare roti - 60 lei\nLichid frana - 100 lei'),
-    ('CJ-19-FST','other','Revizie generala',520,-400,-398,false,97500,
-      E'Ulei si filtre - 280 lei\nVerificare frane - 90 lei\nManopera - 150 lei'),
+    ('CJ-19-FST','repair','Cauciucuri si placute frana',1320,-2,6,true,104900,
+      E'Anvelope Barum 2 buc - 620 lei\nPlacute frana fata - 260 lei\nManopera montaj - 230 lei\nEchilibrare roti - 80 lei\nLichid frana - 130 lei'),
+    ('CJ-19-FST','other','Revizie generala',740,-400,-398,false,97500,
+      E'Ulei si filtre - 360 lei\nVerificare frane - 110 lei\nManopera - 270 lei'),
 
     ('TM-22-YRS','repair','Aer conditionat incarcare freon',380,-260,-258,false,46500,
       E'Incarcare freon - 240 lei\nManopera - 140 lei'),
