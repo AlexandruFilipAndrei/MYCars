@@ -32,6 +32,12 @@ function dateMin(first: Date, second: Date) {
   return first < second ? first : second
 }
 
+function capFutureDate(date: Date) {
+  const today = new Date()
+
+  return date > today ? today : date
+}
+
 function getInclusiveOverlapDays(start: Date, end: Date, bucketStart: Date, bucketEnd: Date) {
   const overlapStart = dateMax(start, bucketStart)
   const overlapEnd = dateMin(end, bucketEnd)
@@ -131,7 +137,7 @@ function buildMonthBuckets(year: number) {
       key: format(date, 'yyyy-MM'),
       label: monthLabels[monthIndex],
       start: startOfMonth(date),
-      end: endOfMonth(date),
+      end: capFutureDate(endOfMonth(date)),
     }
   })
 }
@@ -144,13 +150,17 @@ function buildLastSixMonthBuckets() {
       key: format(date, 'yyyy-MM'),
       label: monthLabels[date.getMonth()],
       start: startOfMonth(date),
-      end: endOfMonth(date),
+      end: capFutureDate(endOfMonth(date)),
     }
   })
 }
 
 function buildAllTimeBuckets(years: number[]) {
-  const sortedYears = [...years].sort((first, second) => first - second)
+  const today = new Date()
+  const currentYear = today.getFullYear()
+  const sortedYears = [...years]
+    .filter((year) => year <= currentYear)
+    .sort((first, second) => first - second)
 
   return sortedYears.map((year) => {
     const date = new Date(year, 0, 1)
@@ -159,7 +169,7 @@ function buildAllTimeBuckets(years: number[]) {
       key: String(year),
       label: String(year),
       start: startOfYear(date),
-      end: endOfYear(date),
+      end: year === currentYear ? today : endOfYear(date),
     }
   })
 }
