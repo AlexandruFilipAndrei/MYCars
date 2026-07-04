@@ -286,7 +286,7 @@ export function StatisticsPage() {
     return formatCurrency(normalized)
   }
   const periodLabel = getPeriodLabel(period)
-  const profitMarginLabel = totals.venituri > 0 ? `${Math.round((totals.profit / totals.venituri) * 100)}%` : '0'
+  const profitMarginLabel = totals.venituri > 0 ? `${Math.round((totals.profit / totals.venituri) * 100)}%` : 'N/A'
 
   return (
     <div className="space-y-6">
