@@ -62,7 +62,7 @@ export function AuthPage() {
 
       await signUp(values.fullName ?? '', values.email, values.password)
       const message =
-        'Cererea de creare cont a fost trimisă. Dacă nu intri direct în aplicație, verifică emailul și confirmă adresa din mesajul primit.'
+        'Cont creat cu succes.'
       setAuthFeedback(message)
       toast.success(message)
     } catch (error) {
