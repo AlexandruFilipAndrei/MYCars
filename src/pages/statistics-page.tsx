@@ -286,7 +286,7 @@ export function StatisticsPage() {
     return formatCurrency(normalized)
   }
   const periodLabel = getPeriodLabel(period)
-  const profitMargin = totals.venituri > 0 ? totals.profit / totals.venituri : 0
+  const profitMarginLabel = totals.venituri > 0 ? `${Math.round((totals.profit / totals.venituri) * 100)}%` : '0'
 
   return (
     <div className="space-y-6">
@@ -317,7 +317,7 @@ export function StatisticsPage() {
         <Summary label="Venituri perioada" value={formatCurrency(totals.venituri)} />
         <Summary label="Cheltuieli perioada" value={formatCurrency(totals.cheltuieli)} />
         <Summary label="Profit perioada" value={formatCurrency(totals.profit)} />
-        <Summary label="Marja profit" value={`${Math.round(profitMargin * 100)}%`} />
+        <Summary label="Marja profit" value={profitMarginLabel} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
