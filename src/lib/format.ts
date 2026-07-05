@@ -118,7 +118,7 @@ export function calculateSegmentTotal(segment: RentalPriceSegment) {
   const end = parseISO(segment.endDate)
   const days = Math.max(differenceInCalendarDays(end, start) + 1, 1)
   const divisor = getPriceUnitDivisor(segment.priceUnit)
-  return Math.ceil(days / divisor) * segment.pricePerUnit
+  return (days / divisor) * segment.pricePerUnit
 }
 
 export function calculateSegmentAccruedRevenue(segment: RentalPriceSegment, accruedDays?: number) {
