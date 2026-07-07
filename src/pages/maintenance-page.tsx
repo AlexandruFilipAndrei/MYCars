@@ -212,7 +212,7 @@ export function MaintenancePage() {
             className="h-11 rounded-2xl border bg-card px-4 text-sm"
           >
             <option value="all">Toate interventiile</option>
-            <option value="blocks">Scoate masina din circuit</option>
+            <option value="blocks">Scoate masina din uz</option>
             <option value="non_blocks">Nu blocheaza masina</option>
           </select>
           {hasActiveFilters ? (
@@ -263,7 +263,7 @@ export function MaintenancePage() {
 
                   <p className="text-sm text-muted-foreground">Data: {formatDate(item.datePerformed)}</p>
                   <p className="text-sm text-muted-foreground">Iese din service: {formatDate(item.serviceEndDate)}</p>
-                  {item.blocksAvailability ? <p className="text-sm text-amber-700 dark:text-amber-300">Scoate masina din circuit pe durata interventiei.</p> : null}
+                  {item.blocksAvailability ? <p className="text-sm text-amber-700 dark:text-amber-300">Scoate masina din uz pe durata interventiei.</p> : null}
                   <p className="text-sm text-muted-foreground">Tip: {getMaintenanceTypeLabel(item.type)}</p>
 
                   {item.notes ? <p className="break-words rounded-2xl bg-muted p-3 text-sm">{item.notes}</p> : null}
@@ -390,10 +390,10 @@ export function MaintenancePage() {
 
             <label className="flex items-center gap-2 text-sm font-medium">
               <input type="checkbox" disabled={selectedCar?.status === 'archived'} {...form.register('blocksAvailability')} />
-              Scoate masina din circuit in aceasta perioada
+              Scoate masina din uz in aceasta perioada
             </label>
 
-            {selectedCar?.status === 'archived' ? <p className="text-sm text-muted-foreground">O masina arhivata nu poate fi scoasa din circuit printr-o interventie noua.</p> : null}
+            {selectedCar?.status === 'archived' ? <p className="text-sm text-muted-foreground">O masina arhivata nu poate fi scoasa din stare printr-o interventie noua.</p> : null}
 
             {selectedCarHasActiveRental ? <p className="text-sm text-muted-foreground">Daca intervalul de service se suprapune cu o inchiriere, salvarea va fi blocata.</p> : null}
 

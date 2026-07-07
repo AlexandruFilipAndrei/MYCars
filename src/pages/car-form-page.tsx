@@ -224,7 +224,7 @@ export function CarFormPage() {
 
       <Card>
         <CardContent className="p-6">
-          <form className="grid gap-5 md:grid-cols-2" onSubmit={onSubmit}>
+          <form className="grid gap-5 md:grid-cols-2" onSubmit={onSubmit} noValidate>
             {!currentCar && editableFleets.length >= 1 ? (
               <Field label="Flotă" required error={form.formState.errors.ownerId?.message}>
                 <select className={selectClass(Boolean(form.formState.errors.ownerId))} {...form.register('ownerId')}>
@@ -247,7 +247,12 @@ export function CarFormPage() {
               <Input className={inputClass(Boolean(form.formState.errors.model))} {...form.register('model')} />
             </Field>
             <Field label="An" error={form.formState.errors.year?.message}>
-              <Input className={inputClass(Boolean(form.formState.errors.year))} type="number" {...form.register('year')} />
+              <Input
+                className={inputClass(Boolean(form.formState.errors.year))}
+                type="number"
+                max={new Date().getFullYear()}
+                {...form.register('year')}
+              />
             </Field>
             <Field label="Culoare">
               <Input {...form.register('color')} />
@@ -288,7 +293,7 @@ export function CarFormPage() {
               <div className="md:col-span-2">
                 <p className="text-sm text-muted-foreground">
                   {currentCar.status === 'maintenance'
-                    ? 'Statusul Service este calculat automat din intervalele de interventie care scot masina din circuit.'
+                    ? 'Statusul Service este calculat automat din intervalele de interventie care scot masina din uz.'
                     : currentCarHasActiveRental
                       ? 'Statusul Inchiriata este calculat automat din intervalele de inchiriere active.'
                       : 'Statusurile operationale Inchiriata si Service sunt calculate automat de aplicatie.'}

@@ -685,7 +685,7 @@ function assertDemoMaintenanceStatusAllowed(
   const selectedCar = state.cars.find((car) => car.id === input.carId)
 
   if (selectedCar?.status === 'archived') {
-    throw new Error('Nu poti scoate din circuit o masina arhivata.')
+    throw new Error('Nu poti scoate din uz o masina arhivata.')
   }
 
   const hasConflict = state.rentals.some(
@@ -696,7 +696,7 @@ function assertDemoMaintenanceStatusAllowed(
   )
 
   if (hasConflict) {
-    throw new Error('Perioada de service care scoate masina din circuit nu poate suprapune o inchiriere.')
+    throw new Error('Perioada de service care scoate masina din uz nu poate suprapune o inchiriere.')
   }
 }
 
@@ -724,7 +724,7 @@ async function assertRemoteMaintenanceStatusAllowed(
   }
 
   if ((carResult.data?.status as Car['status'] | undefined) === 'archived') {
-    throw new Error('Nu poti scoate din circuit o masina arhivata.')
+    throw new Error('Nu poti scoate din uz o masina arhivata.')
   }
 
   const hasConflict = ((rentalsResult.data ?? []) as Array<Pick<RemoteRentalRow, 'start_date' | 'end_date' | 'status'>>).some((rental) =>
@@ -732,7 +732,7 @@ async function assertRemoteMaintenanceStatusAllowed(
   )
 
   if (hasConflict) {
-    throw new Error('Perioada de service care scoate masina din circuit nu poate suprapune o inchiriere.')
+    throw new Error('Perioada de service care scoate masina din uz nu poate suprapune o inchiriere.')
   }
 }
 
@@ -1077,7 +1077,7 @@ async function ensureRemoteRentalAvailability(
   )
 
   if (hasMaintenanceConflict) {
-    throw new Error('Masina are deja o perioada de service care o scoate din circuit in intervalul selectat.')
+    throw new Error('Masina are deja o perioada de service care o scoate din uz in intervalul selectat.')
   }
 }
 
@@ -1109,7 +1109,7 @@ function ensureDemoRentalAvailability(
   )
 
   if (hasMaintenanceConflict) {
-    throw new Error('Masina are deja o perioada de service care o scoate din circuit in intervalul selectat.')
+    throw new Error('Masina are deja o perioada de service care o scoate din uz in intervalul selectat.')
   }
 }
 

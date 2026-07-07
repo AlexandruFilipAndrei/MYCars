@@ -42,7 +42,12 @@ export const carSchema = z.object({
     .pipe(z.string().min(1, 'Acest camp este obligatoriu.').min(4, 'Numarul de inmatriculare este obligatoriu.')),
   brand: z.string().trim().min(1, 'Acest camp este obligatoriu.').min(2, 'Marca este obligatorie.'),
   model: z.string().trim().min(1, 'Acest camp este obligatoriu.'),
-  year: optionalNumberSchema(z.coerce.number().min(1950, 'Anul trebuie sa fie dupa 1950.').max(2100, 'Anul nu este valid.')),
+  year: optionalNumberSchema(
+    z.coerce
+      .number()
+      .min(1950, 'Anul trebuie sa fie dupa 1950.')
+      .max(new Date().getFullYear(), 'Anul nu poate fi mai mare decat anul curent.'),
+  ),
   color: z.string().optional(),
   engineHp: z.coerce.number().min(1, 'Acest camp este obligatoriu.'),
   engineDisplacement: z.coerce.number().min(1, 'Acest camp este obligatoriu.'),
